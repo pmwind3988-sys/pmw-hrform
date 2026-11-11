@@ -294,3 +294,40 @@ export function rowsToHtml(columns: MatrixColumn[], rows: MatrixRow[]): string {
     : `<tr>${headers}</tr>`;
   return `<table style="border-collapse:collapse;width:100%;font-family:Inter,'Segoe UI','Aptos','Helvetica Neue',Arial,sans-serif"><thead>${head}</thead><tbody>${bodyRows}</tbody></table>`;
 }
+
+const isBlankCell = (value: unknown): boolean =>
+  value === undefined || value === null || (typeof value === "string" && value.trim() === "");
+
+/**
+ * A matrix's child-list rows with any cell they lack filled in from the copy
+ * of the same rows kept on the response item (`<question>_Json`).
+ *
+ * The child list is where the rows are read from, but a column SharePoint will
+ * not store under the name the form gave it never arrives there: a column
+ * called `Name` on the Training Needs Analysis came back blank on every view
+ * while the response item still held it. The saved copy is written from the
+ * same answer at the same moment, so row for row it is the same data.
+ *
+ * Only blanks are filled, and only when both hold the same number of rows —
+ * otherwise there is no telling which saved row belongs to which.
+ */
+export function fillMissingMatrixCells(rows: MatrixRow[], saved: unknown): MatrixRow[] {
+  let copy: unknown = saved;
+  if (typeof saved === "string") {
+    try {
+      copy = JSON.parse(saved);
+    } catch {
+      return rows;
+    }
+  }
+  if (!Array.isArray(copy) || copy.length !== rows.length) return rows;
+  return rows.map((row, index) => {
+    const kept: unknown = copy[index];
+    if (!kept || typeof kept !== "object" || Array.isArray(kept)) return row;
+    const filled: MatrixRow = { ...row };
+    for (const [key, value] of Object.entries(kept as Record<string, unknown>)) {
+      if (isBlankCell(filled[key]) && !isBlankCell(value)) filled[key] = value;
+    }
+    return filled;
+  });
+}

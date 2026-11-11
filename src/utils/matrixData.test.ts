@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getTabularFields, getDynamicMatrixFields, encodeMatrixRow, decodeMatrixRow, groupColumnHeaders, rowsToHtml, guideToLines } from "./matrixData";
+import { getTabularFields, getDynamicMatrixFields, encodeMatrixRow, decodeMatrixRow, groupColumnHeaders, rowsToHtml, guideToLines, fillMissingMatrixCells } from "./matrixData";
 import { buildSurveyJson, createQuestion, getSpColumnKind, QUESTION_TYPES } from "./FormBuilderEngine";
 
 function fieldOfType(type: string) {
@@ -190,6 +190,24 @@ describe("groupColumnHeaders", () => {
   });
 });
 
+
+describe("fillMissingMatrixCells", () => {
+  const child = [{ RowIndex: 0, Employee_ID: "A1\nA2", Priority: ["Low"] }, { RowIndex: 1, Employee_ID: "A3" }];
+  const saved = JSON.stringify([{ Employee_ID: "A1\nA2", Name: "Tan\nRavi", Priority: ["High"] }, { Employee_ID: "A3", Name: "Lim" }]);
+
+  it("fills a column the child list never stored from the copy on the response item", () => {
+    expect(fillMissingMatrixCells(child, saved)).toEqual([
+      { RowIndex: 0, Employee_ID: "A1\nA2", Name: "Tan\nRavi", Priority: ["Low"] },
+      { RowIndex: 1, Employee_ID: "A3", Name: "Lim" },
+    ]);
+  });
+
+  it("leaves the rows alone when the copy is missing, unreadable or a different length", () => {
+    expect(fillMissingMatrixCells(child, undefined)).toBe(child);
+    expect(fillMissingMatrixCells(child, "not json")).toBe(child);
+    expect(fillMissingMatrixCells(child, JSON.stringify([{ Name: "Tan" }]))).toBe(child);
+  });
+});
 
 describe("rowsToHtml banner row", () => {
   it("draws one header row when nothing is grouped", () => {

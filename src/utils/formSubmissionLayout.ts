@@ -1,4 +1,5 @@
 import { isManagedCompanyQuestion } from "./companySelection";
+import { fillMissingMatrixCells } from "./matrixData";
 
 type SurveyElement = Record<string, unknown>;
 
@@ -197,7 +198,9 @@ function matrixRows(key: string, responseData: Record<string, unknown>, lookup: 
   const childRowsKey = resolveResponseKey(responseData, lookup, `${key}_childRows`);
   const childRows = childRowsKey ? responseData[childRowsKey] : undefined;
   if (isRecord(childRows) && Array.isArray(childRows.rows)) {
-    return childRows.rows.filter(isRecord);
+    // A column the child list never stored is filled from the copy kept on the response item.
+    const savedKey = resolveResponseKey(responseData, lookup, `${key}_Json`);
+    return fillMissingMatrixCells(childRows.rows.filter(isRecord), savedKey ? responseData[savedKey] : undefined);
   }
 
   const directKey = resolveResponseKey(responseData, lookup, key);

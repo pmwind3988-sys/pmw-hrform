@@ -174,6 +174,19 @@ describe("Training Needs Analysis", () => {
     expect(table.rows[1][1]).toEqual({ text: "PMW0388" });
   });
 
+  it("prints the names the child list never stored, from the copy kept on the response item", () => {
+    const { dynamicMatrix, ...rest } = TRAINING_NEEDS_ANALYSIS_SAMPLE.responseData as Record<string, unknown>;
+    const rows = (dynamicMatrix as Record<string, unknown>[]).map((row) => ({ ...row, Employee_ID: "PMW0211\nPMW0305", Name: "Tan Mei Ling\nNur Aisyah" }));
+    // As the live child list returns them: every column but Name.
+    const childRows = rows.map(({ Name: _dropped, ...row }, i) => ({ RowIndex: i, ...row }));
+    const [table] = blocks(build({
+      ...TRAINING_NEEDS_ANALYSIS_SAMPLE,
+      responseData: { ...rest, dynamicMatrix_Json: JSON.stringify(rows), dynamicMatrix_childRows: { rows: childRows } },
+    }), "roster");
+    expect(table.rows[0][1].lines).toEqual(["PMW0211", "PMW0305"]);
+    expect(table.rows[0][2].lines).toEqual(["Tan Mei Ling", "Nur Aisyah"]);
+  });
+
   it("reads matrix rows kept in the child list", () => {
     const { dynamicMatrix, ...rest } = TRAINING_NEEDS_ANALYSIS_SAMPLE.responseData as Record<string, unknown>;
     const [table] = blocks(build({ ...TRAINING_NEEDS_ANALYSIS_SAMPLE, responseData: { ...rest, dynamicMatrix_childRows: { rows: dynamicMatrix } } }), "roster");
