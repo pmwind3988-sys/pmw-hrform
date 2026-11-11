@@ -30,7 +30,7 @@ import {
 } from "../../utils/paperPdf/trainingNeedsAnalysisLayout";
 import { isEmptyNeedsRow, removeNeedsRow, shownNeedsRowCount, writeNeedsCell, writeNeedsCells, type NeedsRow } from "./needsAnalysisRows";
 import { readSchedule, scheduleColumns, scheduleProblem, scheduleValues, formatSchedule, type ScheduleColumns } from "../../utils/paperPdf/needsSchedule";
-import { defaultNeedsYear, needsYearChoices } from "../../utils/paperPdf/needsYear";
+import { defaultNeedsYear, isNeedsYear, needsYearChoices } from "../../utils/paperPdf/needsYear";
 import { chunkPeople, joinPeople, peopleProblem, readPeople, singleLine, tidyPeople, type NeedsPerson } from "../../utils/paperPdf/needsPeople";
 
 function flatten(elements: NativeElement[]): NativeElement[] {
@@ -87,7 +87,12 @@ export function requirePreparedDesignation(form: NativeForm): NativeForm {
  * people than its SharePoint columns hold saved as two rows of that training.
  */
 export function compactNeedsAnswers(form: NativeForm, values: Record<string, unknown>): Record<string, unknown> {
-  const { table } = needsAnalysisQuestions(form);
+  const { table, year } = needsAnalysisQuestions(form);
+  // A year question never submits anything but a year: a simulated test run can reach here before the sheet has replaced its sample text.
+  if (year && !isNeedsYear(values[year.name])) {
+    const fallback = defaultNeedsYear(new Date());
+    values = { ...values, [year.name]: year.inputType === "number" ? fallback : String(fallback) };
+  }
   const rows = table ? values[table.name] : undefined;
   if (!table || !Array.isArray(rows)) return values;
   const cols = needsPeopleColumns(table.columns);
@@ -488,7 +493,8 @@ export default function PaperNeedsAnalysisInput({ runtime, disabled = false, pre
   // The year is picked from a short list and starts on the one the form is most likely for (needsYear.ts).
   const yearValue = year ? runtime.getValue(year.name) : undefined;
   const yearAnswer = (y: number) => (year?.inputType === "number" ? y : String(y));
-  const yearUnset = Boolean(year) && (yearValue === undefined || yearValue === null || yearValue === "");
+  // Anything that is not a year (nothing yet, or a test run's sample text) gives way to the default.
+  const yearUnset = Boolean(year) && !isNeedsYear(yearValue);
   useEffect(() => {
     if (year && yearUnset && !disabled) runtime.setValue(year.name, yearAnswer(defaultNeedsYear(new Date())));
   });
