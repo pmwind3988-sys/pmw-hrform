@@ -90,6 +90,21 @@
 .pna-head-value .nf { width: 100%; background: transparent; }
 .pna-head-value .nf-field { margin: 0; }
 
+.pna-year-box { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+.pna-year {
+  border: 0;
+  border-bottom: 1px solid var(--pna-rule);
+  border-radius: 0;
+  padding: 5px 4px;
+  min-height: 34px;
+  font: inherit;
+  font-weight: 700;
+  color: var(--pna-ink);
+  background: var(--pna-fill);
+  cursor: pointer;
+}
+.pna-year:focus { outline: 2px solid var(--pna-focus); outline-offset: 2px; }
+
 /* ── The training-needs table ───────────────────────────────────────────── */
 .pna-table-scroll { overflow-x: auto; }
 .pna-table { border-collapse: collapse; width: 100%; table-layout: fixed; min-width: 980px; }

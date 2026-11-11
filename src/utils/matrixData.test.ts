@@ -198,6 +198,11 @@ describe("rowsToHtml banner row", () => {
     expect(html).not.toContain("rowspan");
   });
 
+  it("keeps the lines of a cell that holds several", () => {
+    const html = rowsToHtml([{ name: "a", title: "A" }], [{ a: "Tan Mei Ling\nRavi Kumar" }]);
+    expect(html).toContain("Tan Mei Ling<br>Ravi Kumar");
+  });
+
   it("spans the group and stretches ungrouped titles over both rows", () => {
     const html = rowsToHtml(
       [

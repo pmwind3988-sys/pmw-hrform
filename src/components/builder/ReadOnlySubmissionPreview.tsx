@@ -403,7 +403,8 @@ function MatrixValue({ field, value }: { field: PreviewField; value: unknown }) 
           {rows.map((row, index) => (
             <tr key={index}>
               {columns.map((column) => (
-                <td key={column.name} style={{ padding: "8px 10px", color: C.textPrimary, borderTop: index === 0 ? "none" : `1px solid ${C.border}` }}>
+                // A cell can hold several lines (the people on one Training Needs Analysis row): keep them as lines.
+                <td key={column.name} style={{ padding: "8px 10px", color: C.textPrimary, whiteSpace: "pre-line", borderTop: index === 0 ? "none" : `1px solid ${C.border}` }}>
                   {formatScalarValue(row[column.name], field)}
                 </td>
               ))}

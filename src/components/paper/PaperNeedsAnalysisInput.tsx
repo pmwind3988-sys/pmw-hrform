@@ -30,6 +30,7 @@ import {
 } from "../../utils/paperPdf/trainingNeedsAnalysisLayout";
 import { isEmptyNeedsRow, removeNeedsRow, shownNeedsRowCount, writeNeedsCell, writeNeedsCells, type NeedsRow } from "./needsAnalysisRows";
 import { readSchedule, scheduleColumns, scheduleProblem, scheduleValues, formatSchedule, type ScheduleColumns } from "../../utils/paperPdf/needsSchedule";
+import { defaultNeedsYear, needsYearChoices } from "../../utils/paperPdf/needsYear";
 import { chunkPeople, joinPeople, peopleProblem, readPeople, singleLine, tidyPeople, type NeedsPerson } from "../../utils/paperPdf/needsPeople";
 
 function flatten(elements: NativeElement[]): NativeElement[] {
@@ -484,6 +485,13 @@ export default function PaperNeedsAnalysisInput({ runtime, disabled = false, pre
 
   const others = q.others.filter((el) => visible(el));
   const year = visible(q.year) ? q.year : undefined;
+  // The year is picked from a short list and starts on the one the form is most likely for (needsYear.ts).
+  const yearValue = year ? runtime.getValue(year.name) : undefined;
+  const yearAnswer = (y: number) => (year?.inputType === "number" ? y : String(y));
+  const yearUnset = Boolean(year) && (yearValue === undefined || yearValue === null || yearValue === "");
+  useEffect(() => {
+    if (year && yearUnset && !disabled) runtime.setValue(year.name, yearAnswer(defaultNeedsYear(new Date())));
+  });
 
   return (
     <div className="pna" id="paper-needs-analysis">
@@ -523,7 +531,18 @@ export default function PaperNeedsAnalysisInput({ runtime, disabled = false, pre
         <div className="pna-head-label">YEAR</div>
         <div className="pna-head-value">
           {year ? (
-            <div className="nf" data-variant="reviewer"><NativeControl element={year} runtime={runtime} label={year.title || "Year"} /></div>
+            <div id={`field-${year.name}`} className="pna-year-box">
+              <select
+                className="pna-year"
+                aria-label={year.title || "Year"}
+                value={String(yearValue ?? "")}
+                disabled={disabled || !runtime.stateOf(year).enabled}
+                onChange={(e) => runtime.setValue(year.name, yearAnswer(Number(e.target.value)))}
+              >
+                {needsYearChoices(new Date(), yearValue).map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <span className="pna-hint">the year this training is planned for</span>
+            </div>
           ) : (
             <span><b>{new Date().getFullYear()}</b> <span className="pna-hint">· filled in for you</span></span>
           )}

@@ -695,6 +695,8 @@ function MatrixFieldCard({ field }: { field: FormSubmissionField }) {
               p: 1.25,
               borderBottom: editorialHairline,
               verticalAlign: "top",
+              // A cell can hold several lines (the people on one Training Needs Analysis row): keep them as lines.
+              whiteSpace: "pre-line",
             },
             "& tr:last-of-type td": {
               borderBottom: 0,

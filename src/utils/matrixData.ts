@@ -281,7 +281,8 @@ export function rowsToHtml(columns: MatrixColumn[], rows: MatrixRow[]): string {
       const cells = columns
         .map((c) => {
           const val = row[c.name];
-          const display = Array.isArray(val) ? val.join(", ") : (val ?? "");
+          // A cell of several lines (the people on one Training Needs Analysis row) keeps its lines.
+          const display = Array.isArray(val) ? val.join(", ") : typeof val === "string" ? val.replace(/\r?\n/g, "<br>") : (val ?? "");
           return `<td style="border:1px solid #e5e3f0;padding:6px 10px;font-size:12px;color:#1e1b4b">${display}</td>`;
         })
         .join("");

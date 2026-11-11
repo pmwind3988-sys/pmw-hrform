@@ -63,6 +63,8 @@ function needsAnalysisDemo(): Record<string, unknown> {
           .map((el) => (el.type === "signaturepad" || el.name === "company" ? { ...el, isRequired: true } : el)),
         { type: "text", name: "PreparedByName", title: "Name" },
         { type: "text", name: "PreparedByDesignation", title: "Designation" },
+        // With a Year question the year can be picked; without one the form shows the current year and saves none.
+        { type: "text", name: "Year", title: "Year" },
       ],
     }],
   };
