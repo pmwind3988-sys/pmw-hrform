@@ -115,6 +115,46 @@ export interface ExistingFieldInfo {
   InternalName?: string;
   StaticName?: string;
   EntityPropertyName?: string;
+  /** True for a column every list is born with (Title, and the file name shown as "Name"). */
+  FromBaseType?: boolean;
+}
+
+/**
+ * The asked-for column names SharePoint will never store, because a column
+ * every list is born with already goes by that name.
+ *
+ * `ensureColumns` treats a name as present when any column's title matches,
+ * which is right for a column SharePoint renamed internally and wrong for a
+ * built-in: a question called "Name" matched the file-name column, was never
+ * created, and every answer to it was dropped on save without an error. A name
+ * that is also some column's own internal name is stored there and is fine.
+ */
+export function columnsTakenByBuiltIns(fields: ExistingFieldInfo[], names: string[]): string[] {
+  const same = (a: string | undefined, b: string) => (a ?? "").trim().toLowerCase() === b.trim().toLowerCase();
+  return names.filter((name) => {
+    const stored = fields.some((f) => same(f.InternalName, name) || same(f.StaticName, name) || same(f.EntityPropertyName, name));
+    return !stored && fields.some((f) => f.FromBaseType === true && same(f.Title, name));
+  });
+}
+
+/** Says, in the publish log, which questions or table columns SharePoint cannot store under their name. */
+async function warnOfBuiltInNames(
+  token: string,
+  listTitle: string,
+  columns: SpColumnSpec[],
+  onLog: (msg: string, type: string) => void,
+): Promise<void> {
+  try {
+    const data = await spGet(
+      token,
+      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/fields?$select=Title,InternalName,StaticName,EntityPropertyName,FromBaseType&$top=5000`,
+    ) as { value?: ExistingFieldInfo[] };
+    for (const name of columnsTakenByBuiltIns(data.value || [], columns.map((c) => c.n))) {
+      onLog(`  NOT SAVED: "${name}" in "${listTitle}". SharePoint keeps that name for a column of its own, so answers to it are dropped. Rename it (for example "Full_Name") and publish again.`, 'error');
+    }
+  } catch {
+    // The check is advice; publishing does not depend on it.
+  }
 }
 
 export interface EnsureColumnsResult {
@@ -2308,6 +2348,7 @@ export async function provisionFormList(
   const { columns, matrixFields, hasFileFields } = await surveyQuestionColumnSpecs(token, surveyJson as SurveyJson, onLog);
   const fieldResult = await ensureColumns(token, listTitle, columns);
   logEnsuredColumns(columns, fieldResult, onLog);
+  await warnOfBuiltInNames(token, listTitle, columns, onLog);
 
   for (const matrix of matrixFields) {
     try {
@@ -2365,6 +2406,7 @@ export async function ensureMatrixChildList(
 
   const ensured = await ensureColumns(token, listName, columnSpecs);
   logEnsuredColumns(columnSpecs, ensured, onLog);
+  await warnOfBuiltInNames(token, listName, columnSpecs, onLog);
   await ensureIndexedColumns(token, listName, [
     'ParentResponseId',
     'ParentFormTitle',

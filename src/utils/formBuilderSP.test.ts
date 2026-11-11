@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SurveyJson } from "../types";
-import { createSharePointColumnKeyResolver, surveyQuestionColumnSpecs } from "./formBuilderSP";
+import { columnsTakenByBuiltIns, createSharePointColumnKeyResolver, surveyQuestionColumnSpecs } from "./formBuilderSP";
 
 describe("formBuilderSP column key resolver", () => {
   it("maps long display names to SharePoint REST entity property names", () => {
@@ -20,6 +20,22 @@ describe("formBuilderSP column key resolver", () => {
     expect(resolveColumnKey("questionsOpportunitiesSeekClari")).toBe(
       "questionsOpportunitiesSeekClari",
     );
+  });
+});
+
+describe("columnsTakenByBuiltIns", () => {
+  const fields = [
+    { Title: "Name", InternalName: "FileLeafRef", StaticName: "FileLeafRef", EntityPropertyName: "FileLeafRef", FromBaseType: true },
+    { Title: "Title", InternalName: "Title", StaticName: "Title", EntityPropertyName: "Title", FromBaseType: true },
+    { Title: "Employee ID", InternalName: "Employee_x0020_ID", StaticName: "Employee_x0020_ID", EntityPropertyName: "Employee_x0020_ID", FromBaseType: false },
+  ];
+
+  it("names a column that only matches a built-in column's title", () => {
+    expect(columnsTakenByBuiltIns(fields, ["Name", "Employee ID", "Title", "Priority"])).toEqual(["Name"]);
+  });
+
+  it("is satisfied once a column of that internal name exists", () => {
+    expect(columnsTakenByBuiltIns([...fields, { Title: "Full Name", InternalName: "Name", FromBaseType: false }], ["name"])).toEqual([]);
   });
 });
 

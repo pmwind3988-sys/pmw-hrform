@@ -19,7 +19,7 @@ import { acquireAccessTokenSilentOrRedirect } from "../../utils/authRecovery";
 import { SP_STATIC } from "../../utils/spConfig";
 import { isSuperuserOnlyForm } from "../../utils/superuserOnlyForms";
 import { csvRow, downloadCsv } from "../../utils/csv";
-import { rowsToHtml, getDynamicMatrixFields } from "../../utils/matrixData";
+import { rowsToHtml, getDynamicMatrixFields, fillMissingMatrixCells } from "../../utils/matrixData";
 import { getSelectedCompany } from "../../utils/companySelection";
 import SubmissionFilterPanel from "./SubmissionFilterPanel";
 import {
@@ -296,7 +296,11 @@ export default function ResponseViewer() {
             const childListName = `${formTitle} Matrix ${safeName}`;
 
             try {
-              const rows = await readMatrixChildItems(token, childListName, item.Id, mf.columns);
+              // A column the child list never stored is filled from the copy kept on the response item.
+              const rows = fillMissingMatrixCells(
+                await readMatrixChildItems(token, childListName, item.Id, mf.columns),
+                (fullItem as Record<string, unknown> | undefined)?.[`${mf.name}_Json`],
+              );
               if (rows.length > 0) {
                 tables[mf.name] = {
                   title: mf.title || mf.name,
