@@ -1,33 +1,16 @@
 /**
- * needsYear.ts — Which year a Training Needs Analysis is for.
+ * needsYear.ts — Which year the Training Needs Analysis is for.
  *
- * The form plans training ahead, so one prepared late in the year is almost
- * always for the next: from October on, next year is offered first. The HOD
- * can still pick this year or the one after. Pure.
+ * Fixed, at HR's request: the form plans one year's training, so the sheet
+ * shows that year locked and saves it as the Year question's answer, whatever
+ * a test run or an old draft put there. Change `NEEDS_YEAR` when the next
+ * year's planning opens. Pure.
  */
 
-/** The month (1–12) from which a new form is taken to be planning next year. */
-export const NEXT_YEAR_FROM_MONTH = 10;
+/** The year every Training Needs Analysis filled in now is for. */
+export const NEEDS_YEAR = 2027;
 
-/** The year a form opened today is most likely for. */
-export function defaultNeedsYear(now: Date): number {
-  return now.getFullYear() + (now.getMonth() + 1 >= NEXT_YEAR_FROM_MONTH ? 1 : 0);
-}
-
-/**
- * Whether an answer is a year at all. A test run fills every text question
- * with "Test answer — …", and the list would show that as its first year
- * while the form still held, and saved, the sample text.
- */
-export function isNeedsYear(value: unknown): boolean {
-  return /^(19|20)\d{2}$/.test(String(value ?? "").trim());
-}
-
-/** The years to offer: this year and the two after, plus the one already chosen if it is none of those. */
-export function needsYearChoices(now: Date, chosen?: unknown): number[] {
-  const first = now.getFullYear();
-  const years = [first, first + 1, first + 2];
-  const kept = Number(chosen);
-  if (Number.isInteger(kept) && kept > 1900 && !years.includes(kept)) years.push(kept);
-  return years.sort((a, b) => a - b);
+/** The fixed year as the Year question stores it: a number for a number question, text otherwise. */
+export function needsYearAnswer(inputType?: string): number | string {
+  return inputType === "number" ? NEEDS_YEAR : String(NEEDS_YEAR);
 }

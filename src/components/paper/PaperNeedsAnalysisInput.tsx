@@ -30,7 +30,7 @@ import {
 } from "../../utils/paperPdf/trainingNeedsAnalysisLayout";
 import { isEmptyNeedsRow, removeNeedsRow, shownNeedsRowCount, writeNeedsCell, writeNeedsCells, type NeedsRow } from "./needsAnalysisRows";
 import { readSchedule, scheduleColumns, scheduleProblem, scheduleValues, formatSchedule, type ScheduleColumns } from "../../utils/paperPdf/needsSchedule";
-import { defaultNeedsYear, isNeedsYear, needsYearChoices } from "../../utils/paperPdf/needsYear";
+import { NEEDS_YEAR, needsYearAnswer } from "../../utils/paperPdf/needsYear";
 import { chunkPeople, joinPeople, peopleProblem, readPeople, singleLine, tidyPeople, type NeedsPerson } from "../../utils/paperPdf/needsPeople";
 
 function flatten(elements: NativeElement[]): NativeElement[] {
@@ -88,11 +88,8 @@ export function requirePreparedDesignation(form: NativeForm): NativeForm {
  */
 export function compactNeedsAnswers(form: NativeForm, values: Record<string, unknown>): Record<string, unknown> {
   const { table, year } = needsAnalysisQuestions(form);
-  // A year question never submits anything but a year: a simulated test run can reach here before the sheet has replaced its sample text.
-  if (year && !isNeedsYear(values[year.name])) {
-    const fallback = defaultNeedsYear(new Date());
-    values = { ...values, [year.name]: year.inputType === "number" ? fallback : String(fallback) };
-  }
+  // The year is fixed, so that is what a Year question submits — a simulated test run can reach here still holding its sample text.
+  if (year) values = { ...values, [year.name]: needsYearAnswer(year.inputType) };
   const rows = table ? values[table.name] : undefined;
   if (!table || !Array.isArray(rows)) return values;
   const cols = needsPeopleColumns(table.columns);
@@ -490,13 +487,11 @@ export default function PaperNeedsAnalysisInput({ runtime, disabled = false, pre
 
   const others = q.others.filter((el) => visible(el));
   const year = visible(q.year) ? q.year : undefined;
-  // The year is picked from a short list and starts on the one the form is most likely for (needsYear.ts).
+  // The year is fixed (needsYear.ts): shown locked, and kept as the Year question's answer whatever was put there.
   const yearValue = year ? runtime.getValue(year.name) : undefined;
-  const yearAnswer = (y: number) => (year?.inputType === "number" ? y : String(y));
-  // Anything that is not a year (nothing yet, or a test run's sample text) gives way to the default.
-  const yearUnset = Boolean(year) && !isNeedsYear(yearValue);
+  const yearWrong = Boolean(year) && String(yearValue ?? "") !== String(NEEDS_YEAR);
   useEffect(() => {
-    if (year && yearUnset && !disabled) runtime.setValue(year.name, yearAnswer(defaultNeedsYear(new Date())));
+    if (year && yearWrong && !disabled) runtime.setValue(year.name, needsYearAnswer(year.inputType));
   });
 
   return (
@@ -536,22 +531,9 @@ export default function PaperNeedsAnalysisInput({ runtime, disabled = false, pre
         </div>
         <div className="pna-head-label">YEAR</div>
         <div className="pna-head-value">
-          {year ? (
-            <div id={`field-${year.name}`} className="pna-year-box">
-              <select
-                className="pna-year"
-                aria-label={year.title || "Year"}
-                value={String(yearValue ?? "")}
-                disabled={disabled || !runtime.stateOf(year).enabled}
-                onChange={(e) => runtime.setValue(year.name, yearAnswer(Number(e.target.value)))}
-              >
-                {needsYearChoices(new Date(), yearValue).map((y) => <option key={y} value={y}>{y}</option>)}
-              </select>
-              <span className="pna-hint">the year this training is planned for</span>
-            </div>
-          ) : (
-            <span><b>{new Date().getFullYear()}</b> <span className="pna-hint">· filled in for you</span></span>
-          )}
+          <span id={year ? `field-${year.name}` : undefined}>
+            <b>{NEEDS_YEAR}</b> <span className="pna-hint">· fixed for this form</span>
+          </span>
         </div>
       </div>
 

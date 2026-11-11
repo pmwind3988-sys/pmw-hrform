@@ -69,11 +69,11 @@ describe("paper Training Needs Analysis", () => {
     expect(out.map((row) => row.Employee_ID).join("\n")).toBe(ids.join("\n"));
   });
 
-  it("never submits a test run's sample text as the year", () => {
+  it("always submits the fixed year, whatever the Year question held", () => {
     const withYear = () => parseForm({ title: "Training Needs Analysis", pages: [{ name: "p", elements: [{ type: "text", name: "Year", title: "Year" }] }] });
-    const out = compactNeedsAnswers(withYear(), { Year: "Test answer — Year" });
-    expect(String(out.Year)).toMatch(/^20\d{2}$/);
-    expect(compactNeedsAnswers(withYear(), { Year: "2028" })).toEqual({ Year: "2028" });
+    expect(compactNeedsAnswers(withYear(), { Year: "Test answer — Year" })).toEqual({ Year: "2027" });
+    expect(compactNeedsAnswers(withYear(), { Year: "2028" })).toEqual({ Year: "2027" });
+    expect(compactNeedsAnswers(withYear(), {})).toEqual({ Year: "2027" });
   });
 
   it("stops Submit on a date without days, or an ID with no name among several people", () => {
