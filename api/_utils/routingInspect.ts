@@ -99,6 +99,12 @@ interface RoutedAnswer {
   standInType: string;
   /** Something could not be read, so there is no answer to trust either way. */
   checkFailed?: string;
+  /**
+   * The resolver port already added stand-ins, exactly as submission does.
+   * Adding them again would also add a stand-in's own stand-ins, and a test
+   * run's tester's, which submission never saves.
+   */
+  standInsApplied?: boolean;
 }
 
 function errorText(error: unknown, fallback: string): string {
@@ -211,6 +217,7 @@ async function routeThroughResolver(
     routedPrimary: result.email,
     how: explanation || describeAssigneeSource(layer),
     standInType,
+    standInsApplied: true,
   };
 }
 
@@ -290,7 +297,8 @@ export async function inspectLayerRouting(
     }
     // Submission saves the routed person's stand-ins (a PA) on the step too, so
     // the comparison has to include them or every such step reads as wrong.
-    if (routed.length) {
+    // The resolver branch has them already; the others bypass the resolver.
+    if (routed.length && !answer.standInsApplied) {
       // addStandIns swallows a failed lookup (best effort at submission), so
       // note it here: a stand-in the check could not read is not a known answer.
       const lookupPerson = async (email: string) => {

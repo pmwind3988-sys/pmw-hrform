@@ -196,7 +196,9 @@ describe("inspectLayerRouting", () => {
   });
 
   it("reports a stand-in lookup that throws as a failed check", async () => {
-    const { verdict, checkFailed } = await inspectLayerRouting(layer(), staffItem, 1, ports({
+    // Only the branches that bypass the resolver look stand-ins up here.
+    const rules = [{ id: "r", label: "r", emailValue: "staff@pmw.com", action: "assign-evaluator" as const, evaluatorEmail: "hod@pmw.com" }];
+    const { verdict, checkFailed } = await inspectLayerRouting(layer({ submitterRoutingRules: rules }), staffItem, 1, ports({
       lookupPerson: vi.fn(async () => { throw new Error("Directory offline"); }),
     }));
     expect(verdict.kind).toBe("match");
@@ -234,7 +236,11 @@ describe("inspectLayerRouting", () => {
       email.toLowerCase() === "hod@pmw.com" ? person("hod@pmw.com", { name: "Hod", delegateEmails: ["pa@pmw.com"] }) : null);
     const saved = { ...staffItem, L2_Emails: "hod@pmw.com; pa@pmw.com" };
 
-    const viaResolver = await inspectLayerRouting(layer(), saved, 1, ports({ lookupPerson }));
+    // The resolver port adds stand-ins itself, as submission does.
+    const viaResolver = await inspectLayerRouting(layer(), saved, 1, ports({
+      lookupPerson,
+      resolveLayer: vi.fn(async () => ({ email: "hod@pmw.com", emails: ["hod@pmw.com", "pa@pmw.com"] })),
+    }));
     expect(viaResolver.verdict.kind).toBe("match");
     expect(viaResolver.routedPrimary).toBe("hod@pmw.com");
 
@@ -251,6 +257,33 @@ describe("inspectLayerRouting", () => {
     );
     expect(viaSubject.verdict.kind).toBe("match");
     expect(viaSubject.verdict.routed).toEqual(["hod@pmw.com", "pa@pmw.com"]);
+  });
+
+  it("does not add a stand-in's own stand-in on top of what the resolver decided", async () => {
+    const lookupPerson = vi.fn(async (email: string) => {
+      const key = email.toLowerCase();
+      if (key === "hod@pmw.com") return person("hod@pmw.com", { delegateEmails: ["pa@pmw.com"] });
+      if (key === "pa@pmw.com") return person("pa@pmw.com", { delegateEmails: ["pa-cover@pmw.com"] });
+      return null;
+    });
+    const { verdict } = await inspectLayerRouting(layer(), { ...staffItem, L2_Emails: "hod@pmw.com; pa@pmw.com" }, 1, ports({
+      lookupPerson,
+      resolveLayer: vi.fn(async () => ({ email: "hod@pmw.com", emails: ["hod@pmw.com", "pa@pmw.com"] })),
+    }));
+    expect(verdict.kind).toBe("match");
+    expect(verdict.routed).toEqual(["hod@pmw.com", "pa@pmw.com"]);
+  });
+
+  it("does not add the tester's stand-ins to a test run", async () => {
+    const lookupPerson = vi.fn(async (email: string) =>
+      email.toLowerCase() === "tester@pmw.com" ? person("tester@pmw.com", { delegateEmails: ["tester-pa@pmw.com"] }) : null);
+    const item = { ...staffItem, IsTest: true, TestEmail: "tester@pmw.com", L2_Email: "tester@pmw.com", L2_Emails: "tester@pmw.com" };
+    const { verdict } = await inspectLayerRouting(layer(), item, 1, ports({
+      lookupPerson,
+      resolveLayer: vi.fn(async () => ({ email: "tester@pmw.com", emails: ["tester@pmw.com"], explanation: "Test run: every step goes to the tester." })),
+    }));
+    expect(verdict.kind).toBe("match");
+    expect(verdict.routed).toEqual(["tester@pmw.com"]);
   });
 
   it("has no answer, with the error text, when the resolver throws", async () => {
