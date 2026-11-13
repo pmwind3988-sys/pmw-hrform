@@ -36,6 +36,15 @@ vi.mock("./hrFormsOwner.js", async (importOriginal) => ({ ...(await importOrigin
 const actualMail = await vi.importActual<typeof import("./workflowEmail.js")>("./workflowEmail.js");
 vi.mock("./workflowEmail.js", () => ({ ...actualMail, ...mail }));
 
+// The routing check has its own tests; here it is a stand-in whose answers
+// each test chooses. By default it answers as for a form that is not checked.
+const routing = vi.hoisted(() => ({
+  checkBeforeSend: vi.fn(),
+  createPreSendCheckCache: vi.fn(() => ({ shared: "one per run" })),
+}));
+vi.mock("./preSendRoutingCheck.js", () => routing);
+const SKIPPED = { outcome: "skipped", hold: false, recipients: [], primary: "", fields: {} };
+
 // The handler lives one level up; `api/` files are deployed functions, so its
 // test cannot live beside it without counting against the Hobby function cap.
 const handler = (await import("../workflow-email-cron.js")).default;
@@ -109,6 +118,8 @@ beforeEach(() => {
   mail.sendGraphEmail.mockResolvedValue(undefined);
   mail.persistWorkflowEmailAttempt.mockResolvedValue({});
   graph.getGraphToken.mockResolvedValue("tok");
+  routing.checkBeforeSend.mockResolvedValue(SKIPPED);
+  routing.createPreSendCheckCache.mockImplementation(() => ({ shared: "one per run" }));
 });
 
 describe("the cron scan", () => {
@@ -314,6 +325,263 @@ describe("the cron scan", () => {
       expect(mail.deliverWorkflowEmail).toHaveBeenCalledTimes(1);
       expect(r.result.body).toMatchObject({ sent: 3, summaries: 1, failed: 0 });
       expect((r.result.body?.skipped as string[])[0]).toContain("already sent");
+    });
+  });
+});
+
+describe("the routing check before a checked form's email goes out", () => {
+  const FORM = "Training Evaluation Form";
+  const A = "hod@pmw-group.com";
+  const B = "newhod@pmw-group.com";
+
+  const scheduled = (id: string, recipient: string) => ({
+    "2": {
+      layer: 2, recipient, dueAt: "2020-01-01T00:00:00.000Z", status: "scheduled",
+      updatedAt: "2020-01-01T00:00:00.000Z", layerType: "evaluation", totalLayers: 2,
+      reviewLink: `https://pmw-hrform.vercel.app/eval/training-evaluation-form/${id}/2`, submittedBy: "s@example.com",
+    },
+  });
+  const dueRow = (id: string, recipient: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    fields: {
+      CurrentLayer: 2,
+      L2_Email: recipient,
+      L2_Status: "Pending",
+      WorkflowEmailSchedule: JSON.stringify(scheduled(id, recipient)),
+      ...extra,
+    },
+  });
+  type Row = ReturnType<typeof dueRow>;
+
+  function serveRows(rows: Row[], formFields: Record<string, unknown> = {}) {
+    graph.queryAllListItems.mockImplementation(async (_t: string, list: string) =>
+      list === "Master Form" ? [{ id: "f1", fields: { Title: FORM, ...formFields } }] : list === FORM ? rows : []);
+    graph.queryListItemById.mockImplementation(async (_t: string, _l: string, id: string) =>
+      rows.find((row) => row.id === id) ?? null);
+  }
+
+  /** Answers per item id; anything not named matches with the row's own people. */
+  function answer(byId: Record<string, (row: Row) => Record<string, unknown>>, rows: Row[]) {
+    routing.checkBeforeSend.mockImplementation(async (_t: string, params: { itemId: string; layer: number }) => {
+      const row = rows.find((candidate) => candidate.id === params.itemId)!;
+      const custom = byId[params.itemId];
+      if (custom) return custom(row);
+      return { outcome: "match", hold: false, recipients: [String(row.fields.L2_Email)], primary: String(row.fields.L2_Email), fields: row.fields };
+    });
+  }
+
+  const correctedTo = (address: string) => (row: Row) => ({
+    outcome: "corrected", hold: false, recipients: [address], primary: address,
+    fields: { ...row.fields, L2_Email: address, L2_NotifyEmails: address },
+  });
+  const heldNoRouting = (row: Row) => ({
+    outcome: "held-no-routing", hold: true, recipients: [], primary: "",
+    fields: { ...row.fields, L2_Status: "Needs Routing" }, reason: "No routing answer",
+  });
+
+  const deliveredTo = () => mail.deliverWorkflowEmail.mock.calls
+    .map((call) => (call as unknown[])[1] as WorkflowEmailMessage)
+    .map((message) => (Array.isArray(message.to) ? message.to.join(", ") : message.to));
+  const scheduleWritesFor = (id: string) => graph.updateListItemFields.mock.calls
+    .filter((call) => call[2] === id && call[3].WorkflowEmailSchedule !== undefined);
+
+  it("checks each due step once, sharing one set of directory reads across the run", async () => {
+    const rows = [dueRow("1", A), dueRow("2", A), dueRow("3", A)];
+    serveRows(rows);
+    answer({}, rows);
+
+    await handler(REQ, res());
+
+    expect(routing.createPreSendCheckCache).toHaveBeenCalledTimes(1);
+    expect(routing.checkBeforeSend).toHaveBeenCalledTimes(3);
+    const caches = routing.checkBeforeSend.mock.calls.map((call) => (call as unknown[])[1] as { cache: unknown; trigger: string; formTitle: string; layer: number });
+    expect(new Set(caches.map((params) => params.cache)).size).toBe(1);
+    expect(caches[0].cache).toBe(routing.createPreSendCheckCache.mock.results[0].value);
+    expect(caches.every((params) => params.trigger === "daily-run" && params.formTitle === FORM && params.layer === 2)).toBe(true);
+    // Three matching steps for one person still go as one summary.
+    expect(mail.sendGraphEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("groups by the corrected people: A and B each get a single email, no summary", async () => {
+    const rows = [dueRow("1", A), dueRow("2", A)];
+    serveRows(rows);
+    answer({ "2": correctedTo(B) }, rows);
+
+    const r = res();
+    await handler(REQ, r);
+
+    expect(mail.sendGraphEmail).not.toHaveBeenCalled();
+    expect(deliveredTo().sort()).toEqual([B, A].sort());
+    const claim = JSON.parse(String(scheduleWritesFor("2")[0][3].WorkflowEmailSchedule));
+    expect(claim["2"].recipient).toBe(B);
+    expect(r.result.body).toMatchObject({ sent: 2, digests: 0 });
+  });
+
+  it("leaves a held step scheduled and sends it nothing", async () => {
+    const rows = [dueRow("1", A), dueRow("2", "other@pmw-group.com")];
+    serveRows(rows);
+    answer({ "1": heldNoRouting }, rows);
+
+    const r = res();
+    await handler(REQ, r);
+
+    expect(deliveredTo()).toEqual(["other@pmw-group.com"]);
+    expect(scheduleWritesFor("1")).toHaveLength(0);
+    expect(r.result.body).toMatchObject({ sent: 1, held: 1 });
+  });
+
+  it("holds when the check itself throws", async () => {
+    const rows = [dueRow("1", A)];
+    serveRows(rows);
+    routing.checkBeforeSend.mockRejectedValue(new Error("boom"));
+
+    await handler(REQ, res());
+
+    expect(mail.deliverWorkflowEmail).not.toHaveBeenCalled();
+    expect(scheduleWritesFor("1")).toHaveLength(0);
+  });
+
+  it("sends no request to a step that is parked or on paper", async () => {
+    const rows = [dueRow("1", A), dueRow("2", A)];
+    serveRows(rows);
+    const parked = (status: string) => (row: Row) => ({
+      outcome: "not-checkable", hold: false, recipients: [A], primary: A,
+      fields: { ...row.fields, L2_Status: status },
+    });
+    answer({ "1": parked("Needs Routing"), "2": parked("Manual Evaluation Required") }, rows);
+
+    await handler(REQ, res());
+
+    expect(mail.deliverWorkflowEmail).not.toHaveBeenCalled();
+    expect(mail.sendGraphEmail).not.toHaveBeenCalled();
+    expect(scheduleWritesFor("1")).toHaveLength(0);
+    expect(scheduleWritesFor("2")).toHaveLength(0);
+  });
+
+  it("does not check a test run, even on a checked form", async () => {
+    const rows = [dueRow("1", A, { IsTest: "true", TestEmail: "tester@pmw-group.com" })];
+    serveRows(rows);
+
+    await handler(REQ, res());
+
+    expect(routing.checkBeforeSend).not.toHaveBeenCalled();
+    expect(mail.deliverWorkflowEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not check a form that is not switched on", async () => {
+    graph.queryAllListItems.mockImplementation(async (_t: string, list: string) =>
+      list === "Master Form" ? [{ id: "f1", fields: { Title: "Training Evaluation" } }] : [dueRow("1", A)]);
+
+    await handler(REQ, res());
+
+    expect(routing.checkBeforeSend).not.toHaveBeenCalled();
+    expect(deliveredTo()).toEqual([A]);
+  });
+
+  describe("reminders", () => {
+    // 09:30 in Malaysia on Monday 2 November; the run three mornings later.
+    const SENT = "2026-11-02T01:30:00.000Z";
+    const RUN = new Date(Date.UTC(2026, 10, 5, 0, 0, 0));
+    const reminderForm = {
+      Slug: "training-evaluation-form",
+      LayerConfig: JSON.stringify({
+        layers: [
+          { layerNumber: 1, type: "approval", authMode: "365", title: "Supervisor" },
+          { layerNumber: 2, type: "evaluation", authMode: "365", title: "HOD evaluation" },
+        ],
+      }),
+    };
+    const waitingRow = (id: string) => ({
+      id,
+      fields: {
+        CurrentLayer: 2,
+        L1_Status: "Approved",
+        L1_SignedAt: "2026-11-01T00:00:00.000Z",
+        L2_Status: "Pending",
+        L2_Email: A,
+        SubmittedBy: "trainee@pmw-group.com",
+        WorkflowEmailLog: JSON.stringify({ 2: { layer: 2, recipient: A, status: "sent", attempts: 1, lastAttemptAt: SENT, sentAt: SENT } }),
+      },
+    }) as unknown as Row;
+
+    async function runAt() {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(RUN);
+      try {
+        await handler(REQ, res());
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+    const reminderCounted = () => graph.updateListItemFields.mock.calls
+      .some((call) => call[3].WorkflowEmailLog !== undefined && String(call[3].WorkflowEmailLog).includes("reminders"));
+
+    it("checks before a reminder and reminds the same person on a match", async () => {
+      const rows = [waitingRow("7")];
+      serveRows(rows, reminderForm);
+      answer({}, rows);
+
+      await runAt();
+
+      const params = (routing.checkBeforeSend.mock.calls[0] as unknown[])[1] as { trigger: string; layer: number; itemId: string };
+      expect(params).toMatchObject({ trigger: "reminder", layer: 2, itemId: "7" });
+      expect(mail.sendGraphEmail).toHaveBeenCalledTimes(1);
+      expect(((mail.sendGraphEmail.mock.calls[0] as unknown[])[1] as WorkflowEmailMessage).subject).toMatch(/^Reminder/);
+      expect(reminderCounted()).toBe(true);
+    });
+
+    it("sends no reminder for a held step", async () => {
+      const rows = [waitingRow("7")];
+      serveRows(rows, reminderForm);
+      answer({ "7": heldNoRouting }, rows);
+
+      await runAt();
+
+      expect(mail.sendGraphEmail).not.toHaveBeenCalled();
+      expect(mail.deliverWorkflowEmail).not.toHaveBeenCalled();
+      expect(reminderCounted()).toBe(false);
+    });
+
+    it("sends the corrected people the request itself, not a reminder for something they never got", async () => {
+      const rows = [waitingRow("7")];
+      serveRows(rows, reminderForm);
+      answer({ "7": correctedTo(B) }, rows);
+
+      await runAt();
+
+      expect(reminderCounted()).toBe(false);
+      expect(mail.sendGraphEmail).not.toHaveBeenCalled();
+      expect(deliveredTo()).toEqual([B]);
+      const message = (mail.deliverWorkflowEmail.mock.calls[0] as unknown[])[1] as WorkflowEmailMessage;
+      expect(message.subject).not.toMatch(/^Reminder/);
+      const claim = JSON.parse(String(scheduleWritesFor("7")[0][3].WorkflowEmailSchedule));
+      expect(claim["2"]).toMatchObject({ recipient: B, status: "sending", layerType: "evaluation" });
+      expect(claim["2"].reviewLink).toContain("/eval/training-evaluation-form/7/2");
+    });
+  });
+
+  describe("send selected now", () => {
+    const post = (ids: string[]) => ({
+      method: "POST",
+      headers: { "x-sharepoint-token": "sp" } as Record<string, string>,
+      body: { action: "send-selected", items: ids.map((id) => ({ formTitle: FORM, itemId: id, layer: 2 })) },
+    });
+
+    it("skips a held step with its reason and sends the rest to the routed people", async () => {
+      const rows = [dueRow("1", A), dueRow("2", A), dueRow("3", A)];
+      serveRows(rows);
+      answer({ "1": heldNoRouting, "2": correctedTo(B) }, rows);
+
+      const r = res();
+      await handler(post(["1", "2", "3"]), r);
+
+      expect(routing.createPreSendCheckCache).toHaveBeenCalledTimes(1);
+      const triggers = routing.checkBeforeSend.mock.calls.map((call) => ((call as unknown[])[1] as { trigger: string }).trigger);
+      expect(triggers).toEqual(["send-selected", "send-selected", "send-selected"]);
+      expect(r.result.body?.skipped).toEqual([`${FORM} #1: on hold - No routing answer`]);
+      expect(mail.sendGraphEmail).not.toHaveBeenCalled();
+      expect(deliveredTo().sort()).toEqual([A, B].sort());
+      expect(r.result.body).toMatchObject({ sent: 2, summaries: 0, failed: 0 });
     });
   });
 });

@@ -27,7 +27,11 @@ import {
   type DigestCandidate,
 } from "./_utils/workflowDigest.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
-import { parseValidEmailList } from "./_utils/layerRecipients.js";
+import { joinEmailList, parseValidEmailList } from "./_utils/layerRecipients.js";
+import { checkBeforeSend, createPreSendCheckCache, type PreSendCheckCache, type PreSendCheckResult } from "./_utils/preSendRoutingCheck.js";
+import { isRoutingCheckedForm } from "./_utils/routingCheckedForms.js";
+import { isManualPaperStatus, isNeedsRoutingStatus } from "./_utils/layerParkStatus.js";
+import type { RoutingCheckTrigger } from "./_utils/workflowAssignmentData.js";
 import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
 import { standInEmailNote } from "./_utils/resolveAssignee.js";
 import { isTestRow, readTestRunRedirect, redirectTestMessage, withTestRunStandInFor } from "./_utils/testRun.js";
@@ -63,6 +67,63 @@ function scheduledRecipients(recipient: string): string | string[] {
   const parsed = parseValidEmailList(recipient);
   if (parsed.length === 0) return recipient;
   return parsed.length === 1 ? parsed[0] : parsed;
+}
+
+/**
+ * What the routing check says about one "please act" email.
+ *
+ * - `send` with `recipients`: the check confirmed or corrected the step; send to
+ *   these people, with `fields` as the row now stands.
+ * - `send` without: proceed exactly as before the check existed (form not
+ *   switched on, a test run, or a step the check could not judge).
+ * - `hold`: send nothing. A scheduled entry stays "scheduled", so the next run
+ *   checks it again.
+ */
+type PreSendDecision =
+  | { action: "send"; recipients?: string[]; fields?: Record<string, unknown>; corrected: boolean }
+  | { action: "hold"; reason: string };
+
+async function preSendDecision(
+  token: string,
+  cache: PreSendCheckCache,
+  params: { formTitle: string; itemId: string; layer: number; trigger: RoutingCheckTrigger },
+  fields: Record<string, unknown>,
+  callerRecipient: string,
+): Promise<PreSendDecision> {
+  // Unchecked forms and test runs never reach the check and run exactly as before.
+  if (!isRoutingCheckedForm(params.formTitle) || isTestRow(fields)) return { action: "send", corrected: false };
+  let result: PreSendCheckResult;
+  try {
+    result = await checkBeforeSend(token, { ...params, cache });
+  } catch (error) {
+    // The check reports its own failures; this is only for one that escapes.
+    logWarn("api:workflow-email-cron", "Routing check failed before send; holding the email", {
+      formTitle: params.formTitle,
+      itemId: params.itemId,
+      layer: params.layer,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return { action: "hold", reason: "The routing check could not be completed." };
+  }
+  if (result.hold) return { action: "hold", reason: result.reason || "The routing check held this email." };
+  if (result.outcome === "skipped") return { action: "send", corrected: false };
+  if (result.outcome === "not-checkable") {
+    const status = String(result.fields[`L${params.layer}_Status`] ?? "");
+    if (isNeedsRoutingStatus(status) || isManualPaperStatus(status)) {
+      return { action: "hold", reason: "The step is waiting for routing or is handled on paper." };
+    }
+    if (parseValidEmailList(callerRecipient).length === 0) {
+      return { action: "hold", reason: "The step has nobody to send to." };
+    }
+    return { action: "send", corrected: false };
+  }
+  if (result.recipients.length === 0) return { action: "hold", reason: "Routing gave nobody to send to." };
+  return {
+    action: "send",
+    recipients: result.recipients,
+    fields: result.fields,
+    corrected: result.outcome === "corrected",
+  };
 }
 
 /** A line of a daily summary: a due email, or a reminder for a step already emailed. */
@@ -112,8 +173,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     let examined = 0;
     let remainingForms = 0;
     let reminded = 0;
+    let held = 0;
     const baseUrl = getApplicationBaseUrl();
     const digestCandidates: SummaryCandidate[] = [];
+    // One set of directory and workflow reads for every check in this run.
+    const routingCache = createPreSendCheckCache(token);
 
     for (const [index, form] of forms.entries()) {
       if (Date.now() - startedAt > SCAN_BUDGET_MS) {
@@ -140,7 +204,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           break;
         }
         const dueEntries = getDueWorkflowEmailSchedules(item.fields.WorkflowEmailSchedule);
-        for (const entry of dueEntries) {
+        // The row as the routing check last left it.
+        let fields = item.fields;
+        for (const dueEntry of dueEntries) {
+          let entry = dueEntry;
           examined++;
           const currentLayer = Number(item.fields.CurrentLayer || item.fields.CurrentApprovalLayer || 0);
           if (currentLayer && currentLayer !== entry.layer) continue;
@@ -176,6 +243,23 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             continue;
           }
 
+          // Before it is grouped: a corrected step is grouped by its new people.
+          const decision = await preSendDecision(
+            token,
+            routingCache,
+            { formTitle, itemId: String(item.id), layer: entry.layer, trigger: "daily-run" },
+            fields,
+            entry.recipient,
+          );
+          if (decision.action === "hold") {
+            held++;
+            continue;
+          }
+          if (decision.recipients) {
+            entry = { ...entry, recipient: decision.recipients.join(", ") };
+            fields = decision.fields ?? fields;
+          }
+
           // A signed-in step for a real reviewer waits until the scan is done,
           // so several due for one person can go out as one summary.
           if (!testRun && isSignedInReviewLink(entry.reviewLink)) {
@@ -183,15 +267,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               formTitle,
               itemId: String(item.id),
               entry,
-              referenceNo: String(item.fields[REFERENCE_NO_FIELD] || ""),
-              applicantName: resolveApplicantName(item.fields),
-              trainingTitle: resolveTrainingTitle(item.fields),
-              fields: item.fields,
+              referenceNo: String(fields[REFERENCE_NO_FIELD] || ""),
+              applicantName: resolveApplicantName(fields),
+              trainingTitle: resolveTrainingTitle(fields),
+              fields,
             });
             continue;
           }
 
-          if (await claimAndDeliver(token, formTitle, item, entry, testRun)) sent++;
+          if (await claimAndDeliver(token, formTitle, { id: item.id, fields }, entry, testRun)) sent++;
           else failed++;
         }
 
@@ -210,16 +294,49 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           else failed++;
           continue;
         }
+        const decision = await preSendDecision(
+          token,
+          routingCache,
+          { formTitle, itemId: String(item.id), layer: reminder.layer, trigger: "reminder" },
+          fields,
+          joinEmailList(reminder.recipients),
+        );
+        if (decision.action === "hold") {
+          held++;
+          continue;
+        }
+        if (decision.corrected && decision.recipients) {
+          // The step now belongs to people who never had the request email.
+          // They get the request itself, the way a due entry is sent, not a
+          // reminder of something they were never asked; that send restarts
+          // the step's reminder clock for them.
+          const request = { ...reminderScheduleEntry(reminder, baseUrl, submittedBy), recipient: decision.recipients.join(", ") };
+          const requestFields = decision.fields ?? fields;
+          if (isSignedInReviewLink(request.reviewLink)) {
+            digestCandidates.push({
+              formTitle,
+              itemId: String(item.id),
+              entry: request,
+              referenceNo: String(requestFields[REFERENCE_NO_FIELD] || ""),
+              applicantName: resolveApplicantName(requestFields),
+              trainingTitle: resolveTrainingTitle(requestFields),
+              fields: requestFields,
+            });
+          } else if (await claimAndDeliver(token, formTitle, { id: item.id, fields: requestFields }, request, undefined)) sent++;
+          else failed++;
+          continue;
+        }
+        const due = decision.recipients ? { ...reminder, recipients: decision.recipients } : reminder;
         digestCandidates.push({
           formTitle,
           itemId: String(item.id),
-          entry: reminderScheduleEntry(reminder, baseUrl, submittedBy),
-          referenceNo: reminder.step.referenceNo,
-          applicantName: reminder.step.applicantName,
-          trainingTitle: resolveTrainingTitle(item.fields),
-          reminder: { number: reminder.number, daysWaiting: reminder.daysWaiting },
-          reminderDue: reminder,
-          fields: item.fields,
+          entry: reminderScheduleEntry(due, baseUrl, submittedBy),
+          referenceNo: due.step.referenceNo,
+          applicantName: due.step.applicantName,
+          trainingTitle: resolveTrainingTitle(fields),
+          reminder: { number: due.number, daysWaiting: due.daysWaiting },
+          reminderDue: due,
+          fields,
         });
       }
     }
@@ -252,7 +369,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    return res.status(200).json({ ok: true, examined, sent, failed, reminded, digests, deferred, remainingForms });
+    return res.status(200).json({ ok: true, examined, sent, failed, reminded, held, digests, deferred, remainingForms });
   } catch (error) {
     logError("api:workflow-email-cron", "Scheduled workflow email run failed", error);
     return res.status(500).json({ error: "Internal server error. Please try again." });
@@ -299,6 +416,7 @@ async function handleSendSelected(req: ApiRequest, res: ApiResponse) {
     const candidates: (DigestCandidate & { fields: Record<string, unknown> })[] = [];
     const singles: { formTitle: string; item: ScheduledItem; entry: WorkflowEmailScheduleEntry; testRun: ReturnType<typeof readTestRunRedirect> }[] = [];
     const skipped: string[] = [];
+    const routingCache = createPreSendCheckCache(token);
 
     for (const wanted of items) {
       const row = await queryListItemById(token, wanted.formTitle, wanted.itemId).catch(() => null);
@@ -311,18 +429,28 @@ async function handleSendSelected(req: ApiRequest, res: ApiResponse) {
       if (currentLayer && currentLayer !== entry.layer) { skipped.push(`${label}: no longer at that step`); continue; }
       const testRun = readTestRunRedirect(fields);
       if (isTestRow(fields) && !testRun) { skipped.push(`${label}: test run with no tester address`); continue; }
-      if (!testRun && isSignedInReviewLink(entry.reviewLink)) {
+      const decision = await preSendDecision(
+        token,
+        routingCache,
+        { formTitle: wanted.formTitle, itemId: wanted.itemId, layer: entry.layer, trigger: "send-selected" },
+        fields,
+        entry.recipient,
+      );
+      if (decision.action === "hold") { skipped.push(`${label}: on hold - ${decision.reason}`); continue; }
+      const sendEntry = decision.recipients ? { ...entry, recipient: decision.recipients.join(", ") } : entry;
+      const sendFields = decision.fields ?? fields;
+      if (!testRun && isSignedInReviewLink(sendEntry.reviewLink)) {
         candidates.push({
           formTitle: wanted.formTitle,
           itemId: wanted.itemId,
-          entry,
-          referenceNo: String(fields[REFERENCE_NO_FIELD] || ""),
-          applicantName: resolveApplicantName(fields),
-          trainingTitle: resolveTrainingTitle(fields),
-          fields,
+          entry: sendEntry,
+          referenceNo: String(sendFields[REFERENCE_NO_FIELD] || ""),
+          applicantName: resolveApplicantName(sendFields),
+          trainingTitle: resolveTrainingTitle(sendFields),
+          fields: sendFields,
         });
       } else {
-        singles.push({ formTitle: wanted.formTitle, item: { id: wanted.itemId, fields }, entry, testRun });
+        singles.push({ formTitle: wanted.formTitle, item: { id: wanted.itemId, fields: sendFields }, entry: sendEntry, testRun });
       }
     }
 
