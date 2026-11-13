@@ -35,6 +35,7 @@ import { sharePointTokenFrom, testRunTesterMayAct } from "./_utils/testRunReview
 import type { TestRunStep } from "./_utils/testRunTrail.js";
 import { pickLayerByNumber } from "./_utils/layerPick.js";
 import { readReviewQueue } from "./_utils/reviewQueue.js";
+import { loadSubmissionLayerConfig, parseVersionPayload } from "./_utils/submissionLayerConfig.js";
 
 // Re-exported: its tests and older callers import it from here.
 export { pickLayerByNumber };
@@ -114,20 +115,6 @@ function layerSurveyElements(layer: Record<string, unknown>): Record<string, unk
         typeof element === "object" && element !== null && !Array.isArray(element)
       )
     : [];
-}
-
-function parseVersionPayload(raw: unknown): { surveyJson: unknown; meta: Record<string, unknown>; layerConfig: Record<string, unknown> | null } {
-  if (typeof raw !== "string" || !raw.trim()) return { surveyJson: null, meta: {}, layerConfig: null };
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return {
-      surveyJson: parsed.surveyJson || parsed,
-      meta: isRecord(parsed.meta) ? parsed.meta : {},
-      layerConfig: isRecord(parsed.layerConfig) ? parsed.layerConfig : null,
-    };
-  } catch {
-    return { surveyJson: null, meta: {}, layerConfig: null };
-  }
 }
 
 /**
@@ -1005,21 +992,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // stored row, never off the request.
     const testRun = readTestRunRedirect(itemFields);
     const trailDeps: TestRunStepDeps = { readItem: queryListItemById, updateFields: updateListItemFields };
-    const itemFormVersion = String(itemFields.FormVersion || formConfig.CurrentVersion || "1.0");
-    const itemPublishKey = String(itemFields.PublishKey || formConfig.CurrentPublishKey || "");
-    const versionRow = itemFormVersion
-      ? (await queryWebFormVersion(graphToken, formTitle, itemFormVersion, itemPublishKey || undefined))?.fields
-      : null;
-    const versionPayload = parseVersionPayload(versionRow?.SurveyJSON);
-
-    // Parse LayerConfig
-    let layerConfigParsed: { layers: Record<string, unknown>[]; manualBranches?: { name?: string; label?: string; layers?: Record<string, unknown>[] }[] } | null = null;
-    const rawLayerConfig = versionPayload.layerConfig
-      ? JSON.stringify(versionPayload.layerConfig)
-      : formConfig.LayerConfig as string | undefined;
-    if (rawLayerConfig) {
-      try { layerConfigParsed = JSON.parse(rawLayerConfig); } catch { /* invalid JSON, fall through */ }
-    }
+    const { layerConfig: layerConfigParsed } = await loadSubmissionLayerConfig(graphToken, formTitle, formConfig, itemFields);
     if (!layerConfigParsed?.layers) return res.status(400).json({ error: "Form has no layer config" });
 
     // Which branch this submission took. Settled before the layer is chosen,

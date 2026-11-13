@@ -684,6 +684,71 @@ export function buildLayerNeedsRoutingEmail(
   };
 }
 
+export interface RoutingHoldNoticeEmailParams {
+  formTitle: string;
+  responseItemId: string | number;
+  layer: number;
+  totalLayers: number;
+  layerType: "approval" | "evaluation";
+  /** Why the email was held, in the check's own words. */
+  reason: string;
+  referenceNo?: string;
+  /** The name the form collected, which is who the request is actually about. */
+  applicantName?: string;
+  submittedBy: string;
+  /** "no-routing": the Routing page has no answer. "check-failing": the check keeps failing. */
+  kind: "no-routing" | "check-failing";
+}
+
+const ROUTING_HOLD_INTRO: Record<RoutingHoldNoticeEmailParams["kind"], string> = {
+  "no-routing": "The request email for this step was not sent, because the Routing page has no approver for it. Open the submission in All Submissions and use Reconfigure this submission to name the person; the email goes out then.",
+  "check-failing": "The routing check for this step has failed five mornings in a row, so its email is still waiting. It will keep retrying.",
+};
+
+/**
+ * Tells the HR forms mailbox that a step's request email is being held by the
+ * routing check before sending (`preSendRoutingCheck.ts`). Addressed to the
+ * mailbox workflow mail is sent from; `to` is empty when none is configured.
+ *
+ * Like `buildLayerNeedsRoutingEmail`, it has no action link and no follow-up
+ * flag: it asks nobody to act as a reviewer.
+ */
+export function buildRoutingHoldNoticeEmail(
+  params: RoutingHoldNoticeEmailParams,
+): WorkflowEmailMessage {
+  const sender = resolveHrFormSender();
+  const onHold = params.kind === "no-routing";
+  return {
+    to: sender ? [sender] : [],
+    subject: buildWorkflowEmailSubject({
+      prefix: onHold ? "Email On Hold" : "Routing Check Failing",
+      formTitle: params.formTitle,
+      applicantName: params.applicantName,
+      submittedBy: params.submittedBy,
+      referenceNo: params.referenceNo,
+      responseItemId: params.responseItemId,
+    }),
+    body: renderWorkflowEmail({
+      preheader: `${params.formTitle} #${params.responseItemId}: the request email for layer ${params.layer} is on hold.`,
+      eyebrow: "System notification",
+      status: WORKFLOW_EMAIL_STATUS.awaitingRouting,
+      heading: onHold
+        ? `${params.formTitle}: a request email is on hold`
+        : `${params.formTitle}: the routing check keeps failing`,
+      intro: ROUTING_HOLD_INTRO[params.kind],
+      details: [
+        { label: "Form", value: params.formTitle },
+        referenceDetail(params.referenceNo),
+        { label: "Submission ID", value: `#${params.responseItemId}` },
+        applicantDetail(params.applicantName),
+        { label: "Submitted by", value: params.submittedBy },
+        { label: "Workflow stage", value: `Layer ${params.layer} of ${params.totalLayers} (${params.layerType})` },
+      ],
+      callout: `**Why:** ${params.reason}`,
+    }),
+  };
+}
+
 export function buildWorkflowActionEmail(
   params: WorkflowActionEmailParams,
 ): WorkflowEmailMessage {

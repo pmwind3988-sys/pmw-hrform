@@ -9,6 +9,10 @@
  * Every lookup answers `null` rather than throwing when a person or role is
  * missing. That is deliberate: a directory gap parks one submission for an
  * admin to resolve, and must never be the reason a submission is lost.
+ *
+ * `strict: true` turns that off for callers that would act on "nobody is
+ * listed" by taking someone off a step (the pre-send routing check): there a
+ * read that failed must look like a failure, never like an empty directory.
  */
 import { queryListItems, graphFieldEquals, getListColumns } from "./graphClient.js";
 import {
@@ -55,8 +59,17 @@ const SUBJECT_SCAN_LIMIT = 999;
 export function createApprovalDirectoryReader(
   token: string,
   /** The form's `LayerConfig`, so the employee's questions can be told apart. */
-  options: { layerConfig?: unknown } = {},
+  options: {
+    layerConfig?: unknown;
+    /**
+     * Throw on a failed read (columns, person, role, scan) and on a directory
+     * too incomplete to answer, instead of answering null / []. A failure is
+     * not remembered, so the next call reads again.
+     */
+    strict?: boolean;
+  } = {},
 ) {
+  const strict = options.strict === true;
   const people = new Map<string, ApprovalDirectoryRow | null>();
   let routableRows: Promise<ApprovalDirectoryRow[]> | null = null;
   let columnsPromise: Promise<DirectoryColumnMap | null> | null = null;
@@ -76,11 +89,19 @@ export function createApprovalDirectoryReader(
         key: column.name,
         aliases: [column.name, column.displayName].filter(Boolean),
       }))))
-      .then((map) => (directoryIsUsable(map) ? map : null))
+      .then((map) => {
+        if (directoryIsUsable(map)) return map;
+        if (strict) throw new Error("The Approval Directory is missing the columns routing needs.");
+        return null;
+      })
       .catch((error) => {
         logWarn("api:approval-directory", "Could not read directory columns", {
           errorMessage: error instanceof Error ? error.message : String(error),
         });
+        if (strict) {
+          columnsPromise = null;
+          throw error;
+        }
         return null;
       });
     return columnsPromise;
@@ -111,6 +132,7 @@ export function createApprovalDirectoryReader(
         logWarn("api:approval-directory", "Person lookup failed", {
           errorMessage: error instanceof Error ? error.message : String(error),
         });
+        if (strict) throw error;
       }
     }
 
@@ -148,6 +170,7 @@ export function createApprovalDirectoryReader(
       logWarn("api:approval-directory", "Role holder lookup failed", {
         errorMessage: error instanceof Error ? error.message : String(error),
       });
+      if (strict) throw error;
       return null;
     }
   }
@@ -163,18 +186,27 @@ export function createApprovalDirectoryReader(
         logWarn("api:approval-directory", "Directory scan failed", {
           errorMessage: error instanceof Error ? error.message : String(error),
         });
+        if (strict) throw error;
         return [];
       }
+    }).catch((error: unknown) => {
+      // Only reached in strict mode: forget the failure so a later call reads again.
+      routableRows = null;
+      throw error;
     });
     return routableRows;
   }
 
   /**
    * The employee a submission is about, found from its answers. Answers null
-   * rather than throwing, like every lookup here.
+   * rather than throwing, like every lookup here (unless strict). `layerConfig`
+   * overrides the reader's own, for a reader shared across forms.
    */
-  async function lookupSubject(data: Record<string, unknown>): Promise<ApprovalDirectoryRow | null> {
-    const mapping = subjectFieldMapping(options.layerConfig, optionsFromSubmittedData(data));
+  async function lookupSubject(
+    data: Record<string, unknown>,
+    layerConfig: unknown = options.layerConfig,
+  ): Promise<ApprovalDirectoryRow | null> {
+    const mapping = subjectFieldMapping(layerConfig, optionsFromSubmittedData(data));
     return findSubjectRow(await allRoutableRows(), data, mapping) ?? null;
   }
 
@@ -192,10 +224,12 @@ export function createApprovalDirectoryReader(
       const row = await lookupPerson(email);
       return row ? toPerson(row) : null;
     },
-    lookupSubject: async (data: Record<string, unknown>) => {
-      const row = await lookupSubject(data);
+    lookupSubject: async (data: Record<string, unknown>, layerConfig?: unknown) => {
+      const row = await lookupSubject(data, layerConfig ?? options.layerConfig);
       return row ? toPerson(row) : null;
     },
     lookupRoleHolder,
+    /** Every active, confirmed row (`[]` when the directory is not set up, unless strict). */
+    routableRows: allRoutableRows,
   };
 }
