@@ -67,7 +67,8 @@ import {
   resolveLayerAssignee as resolveSharedLayerAssignee,
   type ResolvableLayer,
 } from "../../utils/resolveAssignee";
-import { createApprovalDirectoryReader } from "../../utils/approvalDirectory";
+import { forEachSurveyElement } from "../../utils/surveyWalk";
+import { createApprovalDirectoryReader, loadApprovalDirectory } from "../../utils/approvalDirectory";
 import { isPersonEmail } from "../../utils/directoryHarvest";
 import { resolveEvaluationSubmitterRouting } from "../../utils/evaluationSubmitterRouting";
 import { getWorkflowEmailStatus, overdueDays } from "../../utils/workflowEmailLog";
@@ -78,7 +79,11 @@ import {
   updateScheduledWorkflowEmailRecipient,
 } from "../../utils/workflowEmailSchedule";
 import { getWorkflowAssignment, setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentData";
-import { inspectLayerRouting as inspectSharedLayerRouting, type InspectableLayer } from "../../utils/routingInspect";
+import {
+  inspectLayerRouting as inspectSharedLayerRouting,
+  type InspectableLayer,
+  type RoutingInspection,
+} from "../../utils/routingInspect";
 import type { LayerRoutingVerdict } from "../../utils/routingCheck";
 import RoutingCheckPanel from "./RoutingCheckPanel";
 import ReadOnlySubmissionPreview from "./ReadOnlySubmissionPreview";
@@ -2269,15 +2274,29 @@ export default function ApprovalDashboard() {
     rawItem: Record<string, unknown>,
     layer: LayerConfigItem,
     currentLayerNumber: number,
-  ): Promise<{ verdict: LayerRoutingVerdict; routedPrimary: string }> => {
+  ): Promise<RoutingInspection> => {
     const configSource = itemLayerConfigsRef.current[getPendingItemKey(selectedItem as PendingItem)]
       || formLayerConfigsRef.current[selectedItem?.Title ?? ""];
-    const directory = createApprovalDirectoryReader(token ?? "", { layerConfig: configSource });
     return inspectSharedLayerRouting(layer as InspectableLayer, rawItem, currentLayerNumber, {
       resolveLayer: (target, item) =>
         resolveLayerAssigneeEmail(token ?? "", target as unknown as LayerConfigItem, item, currentFormSlug()),
-      lookupSubject: directory.lookupSubject,
-      lookupPerson: directory.lookupPerson,
+      loadSubjectDirectory: async () => {
+        // The form's own question titles say what each answer is far better
+        // than the stored column names do.
+        const questions: { name: string; title: string }[] = [];
+        forEachSurveyElement(surveyJson, (element) => {
+          const name = typeof element.name === "string" ? element.name : "";
+          if (name) questions.push({ name, title: typeof element.title === "string" ? element.title : name });
+        });
+        const directory = await loadApprovalDirectory(token ?? "");
+        return {
+          usable: directory.usable,
+          rows: directory.rows.filter((row) => row.isActive && row.confirmed),
+          questions,
+          layerConfig: configSource,
+        };
+      },
+      lookupPerson: createApprovalDirectoryReader(token ?? "").lookupPerson,
       paperMailbox: CONFIGURED_MANUAL_PAPER_EMAIL,
     });
   };

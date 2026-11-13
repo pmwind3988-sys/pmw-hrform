@@ -1,17 +1,33 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { inspectLayerRouting, type InspectableLayer, type RoutingInspectPorts } from "../routingInspect";
+import {
+  inspectLayerRouting,
+  type InspectableLayer,
+  type RoutingInspectPorts,
+  type SubjectDirectory,
+  type SubjectDirectoryRow,
+} from "../routingInspect";
 import type { DirectoryPerson, ResolvableLayer } from "../resolveAssignee";
 
 function person(email: string, extra: Partial<DirectoryPerson> = {}): DirectoryPerson {
   return { email, name: email.split("@")[0], department: "", position: "", approverEmail: "", ...extra };
 }
 
+const ali: SubjectDirectoryRow = { personEmail: "ali@pmw.com", personName: "Ali bin Abu", employeeId: "SG 010", approverEmail: "HOD@pmw.com" };
+
+function subjectDirectory(extra: Partial<SubjectDirectory> = {}) {
+  return vi.fn(async (): Promise<SubjectDirectory> => ({ usable: true, rows: [ali], questions: [], layerConfig: null, ...extra }));
+}
+
+/** A public-link submission whose answers name the employee by staff number. */
+const guestItem = { SubmittedBy: "GUEST", staffNumber: "sg010", L2_Email: "hod@pmw.com", L2_Emails: "hod@pmw.com" };
+const deptLayer = (): InspectableLayer => layer({ assignee: { type: "department-approver", value: "department" } });
+
 function ports(overrides: Partial<RoutingInspectPorts> = {}): RoutingInspectPorts {
   return {
     resolveLayer: vi.fn(async () => ({ email: "hod@pmw.com", emails: ["hod@pmw.com"], explanation: "Chain: hod." })),
-    lookupSubject: vi.fn(async () => null),
+    loadSubjectDirectory: subjectDirectory({ rows: [] }),
     lookupPerson: vi.fn(async () => null),
     paperMailbox: "",
     ...overrides,
@@ -100,30 +116,91 @@ describe("inspectLayerRouting", () => {
   });
 
   it("looks a public-link submission's employee up from the form's answers", async () => {
-    const p = ports({ lookupSubject: vi.fn(async () => person("ali@pmw.com", { name: "Ali", approverEmail: "HOD@pmw.com" })) });
-    const dept = layer({ assignee: { type: "department-approver", value: "department" } });
-    const item = { ...staffItem, SubmittedBy: "GUEST" };
-    const { verdict, routedPrimary } = await inspectLayerRouting(dept, item, 1, p);
-    expect(p.lookupSubject).toHaveBeenCalledWith(item);
+    const p = ports({ loadSubjectDirectory: subjectDirectory() });
+    const { verdict, routedPrimary, checkFailed } = await inspectLayerRouting(deptLayer(), guestItem, 1, p);
+    expect(p.loadSubjectDirectory).toHaveBeenCalled();
     expect(p.resolveLayer).not.toHaveBeenCalled();
     expect(verdict.kind).toBe("match");
     expect(routedPrimary).toBe("hod@pmw.com");
-    expect(verdict.how).toBe("Routing page (Approval Directory): Ali, taken from the form's answers, is approved by hod@pmw.com.");
+    expect(verdict.how).toBe("Routing page (Approval Directory): Ali bin Abu (SG 010), taken from the form's answers, is approved by hod@pmw.com.");
+    expect(checkFailed).toBeUndefined();
   });
 
-  it("has no answer when the form's employee is not in the directory", async () => {
-    const dept = layer({ assignee: { type: "department-approver", value: "department" } });
-    const { verdict } = await inspectLayerRouting(dept, { ...staffItem, SubmittedBy: "GUEST" }, 1, ports());
+  it("finds the employee through a question's title when its stored name says nothing", async () => {
+    const item = { SubmittedBy: "GUEST", question7: "SG010", L2_Emails: "hod@pmw.com" };
+    const withoutTitles = await inspectLayerRouting(deptLayer(), item, 1, ports({ loadSubjectDirectory: subjectDirectory() }));
+    expect(withoutTitles.verdict.kind).toBe("unresolved");
+
+    const withTitles = await inspectLayerRouting(deptLayer(), item, 1, ports({
+      loadSubjectDirectory: subjectDirectory({ questions: [{ name: "question7", title: "Staff Number" }] }),
+    }));
+    expect(withTitles.verdict.kind).toBe("match");
+    expect(withTitles.routedPrimary).toBe("hod@pmw.com");
+  });
+
+  it("says which fields it tried when nothing usable is in the answers", async () => {
+    const item = { SubmittedBy: "GUEST", L2_Emails: "hod@pmw.com" };
+    const { verdict, checkFailed } = await inspectLayerRouting(deptLayer(), item, 1, ports({ loadSubjectDirectory: subjectDirectory() }));
+    expect(verdict.kind).toBe("unresolved");
+    expect(verdict.note).toBe("The form has no usable submitter address, and no employee email, staff number or name could be found to look up on the routing page."
+      + " Fields tried (guessed from labels): name = none, staff number = none, email = none.");
+    expect(checkFailed).toBeUndefined();
+  });
+
+  it("names the form settings' fields when the form has a harvest mapping", async () => {
+    const layerConfig = { directoryHarvest: { enabled: true, nameField: "fullName", employeeIdField: "staffNo" } };
+    const item = { SubmittedBy: "GUEST", L2_Emails: "hod@pmw.com" };
+    const { verdict } = await inspectLayerRouting(deptLayer(), item, 1, ports({ loadSubjectDirectory: subjectDirectory({ layerConfig }) }));
+    expect(verdict.note).toBe("The form has no usable submitter address, and no employee email, staff number or name could be found to look up on the routing page."
+      + " Fields tried (form settings): name = fullName, staff number = staffNo, email = none.");
+  });
+
+  it("reports an unreadable directory as a failed check, not as no answer", async () => {
+    const { verdict, checkFailed } = await inspectLayerRouting(deptLayer(), guestItem, 1, ports({
+      loadSubjectDirectory: subjectDirectory({ usable: false, rows: [] }),
+    }));
+    expect(verdict.kind).toBe("unresolved");
+    expect(verdict.note).toBe("The Approval Directory could not be read.");
+    expect(checkFailed).toBe("The Approval Directory could not be read.");
+  });
+
+  it("reports a directory read that throws as a failed check", async () => {
+    const { verdict, checkFailed } = await inspectLayerRouting(deptLayer(), guestItem, 1, ports({
+      loadSubjectDirectory: vi.fn(async () => { throw new Error("Graph timed out"); }),
+    }));
+    expect(verdict.kind).toBe("unresolved");
+    expect(verdict.note).toBe("Graph timed out");
+    expect(checkFailed).toBe("Graph timed out");
+  });
+
+  it("has no answer, and no failed check, when the form's employee is not in the directory", async () => {
+    const { verdict, checkFailed } = await inspectLayerRouting(deptLayer(), guestItem, 1, ports());
     expect(verdict.kind).toBe("unresolved");
     expect(verdict.note).toBe("The employee on the form is not in the Approval Directory (checked staff number, email and name), so the routing page has no approver for them.");
+    expect(checkFailed).toBeUndefined();
   });
 
   it("has no answer when the form's employee has no approver", async () => {
-    const p = ports({ lookupSubject: vi.fn(async () => person("ali@pmw.com", { name: "Ali" })) });
-    const dept = layer({ assignee: { type: "department-approver", value: "department" } });
-    const { verdict } = await inspectLayerRouting(dept, { ...staffItem, SubmittedBy: "GUEST" }, 1, p);
+    const p = ports({ loadSubjectDirectory: subjectDirectory({ rows: [{ ...ali, approverEmail: "" }] }) });
+    const { verdict, checkFailed } = await inspectLayerRouting(deptLayer(), guestItem, 1, p);
     expect(verdict.kind).toBe("unresolved");
-    expect(verdict.note).toBe("Ali has no approver on the routing page.");
+    expect(verdict.note).toBe("Ali bin Abu has no approver on the routing page.");
+    expect(checkFailed).toBeUndefined();
+  });
+
+  it("leaves a parked resolver answer as a genuine gap", async () => {
+    const { checkFailed } = await inspectLayerRouting(layer(), staffItem, 1, ports({
+      resolveLayer: vi.fn(async () => ({ email: "", emails: [], parked: { reason: "Nobody listed." } })),
+    }));
+    expect(checkFailed).toBeUndefined();
+  });
+
+  it("reports a stand-in lookup that throws as a failed check", async () => {
+    const { verdict, checkFailed } = await inspectLayerRouting(layer(), staffItem, 1, ports({
+      lookupPerson: vi.fn(async () => { throw new Error("Directory offline"); }),
+    }));
+    expect(verdict.kind).toBe("match");
+    expect(checkFailed).toContain("Directory offline");
   });
 
   it("does not count a fallback as routing's answer", async () => {
@@ -168,9 +245,9 @@ describe("inspectLayerRouting", () => {
 
     const viaSubject = await inspectLayerRouting(
       layer({ assignee: { type: "department-approver", value: "department" } }),
-      { ...saved, SubmittedBy: "GUEST" },
+      { ...saved, SubmittedBy: "GUEST", staffNumber: "SG010" },
       1,
-      ports({ lookupPerson, lookupSubject: vi.fn(async () => person("ali@pmw.com", { approverEmail: "hod@pmw.com" })) }),
+      ports({ lookupPerson, loadSubjectDirectory: subjectDirectory() }),
     );
     expect(viaSubject.verdict.kind).toBe("match");
     expect(viaSubject.verdict.routed).toEqual(["hod@pmw.com", "pa@pmw.com"]);
@@ -178,9 +255,10 @@ describe("inspectLayerRouting", () => {
 
   it("has no answer, with the error text, when the resolver throws", async () => {
     const p = ports({ resolveLayer: vi.fn(async () => { throw new Error("SharePoint is down"); }) });
-    const { verdict } = await inspectLayerRouting(layer(), staffItem, 1, p);
+    const { verdict, checkFailed } = await inspectLayerRouting(layer(), staffItem, 1, p);
     expect(verdict.kind).toBe("unresolved");
     expect(verdict.note).toBe("SharePoint is down");
+    expect(checkFailed).toBe("SharePoint is down");
   });
 
   it("passes a resolver's error and parked reason through", async () => {
