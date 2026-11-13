@@ -1,3 +1,13 @@
+/**
+ * workflowAssignmentData.ts — who a submission's workflow layers are assigned
+ * to, plus the log of routing checks made before request emails.
+ *
+ * Mirrored at `api/_utils/workflowAssignmentData.ts`; a test keeps the two
+ * identical below this header. Imports end in `.js` so one text compiles on
+ * both sides.
+ */
+import { emailListsMatch } from "./layerRecipients.js";
+
 export interface WorkflowAssignmentSnapshot {
   email: string;
   displayName?: string;
@@ -15,9 +25,41 @@ export interface WorkflowAssignmentEntry extends WorkflowAssignmentSnapshot {
   history: WorkflowAssignmentSnapshot[];
 }
 
+export type RoutingCheckOutcome =
+  | "match" | "corrected" | "left-alone" | "not-checkable"
+  | "held-no-routing" | "held-check-failed";
+
+export type RoutingCheckTrigger =
+  | "submission" | "step-advanced" | "daily-run" | "reminder"
+  | "send-selected" | "send-now" | "link-reissue";
+
+export interface RoutingCheckEntry {
+  at: string;
+  firstAt?: string;
+  layer: number;
+  trigger: RoutingCheckTrigger;
+  outcome: RoutingCheckOutcome;
+  saved: string[];
+  routed: string[];
+  note?: string;
+  how?: string;
+  count?: number;
+}
+
+/** Newest checks kept per submission; older ones are dropped. */
+export const MAX_ROUTING_CHECKS = 60;
+
+const ROUTING_OUTCOMES: readonly string[] = [
+  "match", "corrected", "left-alone", "not-checkable", "held-no-routing", "held-check-failed",
+];
+const ROUTING_TRIGGERS: readonly string[] = [
+  "submission", "step-advanced", "daily-run", "reminder", "send-selected", "send-now", "link-reissue",
+];
+
 export interface WorkflowAssignmentData {
   version: 1;
   layers: Record<string, WorkflowAssignmentEntry>;
+  checks?: RoutingCheckEntry[];
 }
 
 export interface WorkflowAssignmentOverrideInput {
@@ -66,6 +108,44 @@ function parseSnapshot(value: unknown): WorkflowAssignmentSnapshot | null {
   };
 }
 
+function parseEmails(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function parseRoutingCheck(value: unknown): RoutingCheckEntry | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const at = optionalText(record.at);
+  const layer = Number(record.layer);
+  const saved = parseEmails(record.saved);
+  const routed = parseEmails(record.routed);
+  if (!at || !Number.isInteger(layer) || layer < 1 || !saved || !routed) return null;
+  if (typeof record.outcome !== "string" || !ROUTING_OUTCOMES.includes(record.outcome)) return null;
+  if (typeof record.trigger !== "string" || !ROUTING_TRIGGERS.includes(record.trigger)) return null;
+  const count = Number(record.count);
+  return {
+    at,
+    ...(optionalText(record.firstAt) ? { firstAt: optionalText(record.firstAt) } : {}),
+    layer,
+    trigger: record.trigger as RoutingCheckTrigger,
+    outcome: record.outcome as RoutingCheckOutcome,
+    saved,
+    routed,
+    ...(optionalText(record.note) ? { note: optionalText(record.note) } : {}),
+    ...(optionalText(record.how) ? { how: optionalText(record.how) } : {}),
+    ...(Number.isInteger(count) && count >= 1 ? { count } : {}),
+  };
+}
+
+function parseRoutingChecks(value: unknown): RoutingCheckEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(parseRoutingCheck)
+    .filter((entry): entry is RoutingCheckEntry => entry !== null)
+    .slice(-MAX_ROUTING_CHECKS);
+}
+
 export function parseWorkflowAssignmentData(raw: unknown): WorkflowAssignmentData {
   let value = raw;
   if (typeof raw === "string") {
@@ -80,9 +160,11 @@ export function parseWorkflowAssignmentData(raw: unknown): WorkflowAssignmentDat
     return { ...EMPTY_ASSIGNMENT_DATA, layers: {} };
   }
 
+  const checks = parseRoutingChecks((value as Record<string, unknown>).checks);
+  const checksPart = checks.length > 0 ? { checks } : {};
   const rawLayers = (value as Record<string, unknown>).layers;
   if (!rawLayers || typeof rawLayers !== "object" || Array.isArray(rawLayers)) {
-    return { ...EMPTY_ASSIGNMENT_DATA, layers: {} };
+    return { ...EMPTY_ASSIGNMENT_DATA, layers: {}, ...checksPart };
   }
 
   const layers: Record<string, WorkflowAssignmentEntry> = {};
@@ -99,7 +181,50 @@ export function parseWorkflowAssignmentData(raw: unknown): WorkflowAssignmentDat
       : [];
     layers[String(layer)] = { layer, ...snapshot, history };
   }
-  return { version: 1, layers };
+  return { version: 1, layers, ...checksPart };
+}
+
+/** The routing checks stored with a submission, oldest first. */
+export function readRoutingChecks(raw: unknown): RoutingCheckEntry[] {
+  return parseWorkflowAssignmentData(raw).checks ?? [];
+}
+
+/**
+ * Adds a routing check to the log. A repeat of the layer's latest check (same
+ * outcome, saved people and routed people) only bumps its count, so a daily
+ * hold does not fill the log.
+ */
+export function recordRoutingCheck(
+  raw: unknown,
+  entry: RoutingCheckEntry,
+): { data: WorkflowAssignmentData; isNew: boolean; count: number } {
+  const data = parseWorkflowAssignmentData(raw);
+  const checks = [...(data.checks ?? [])];
+  let latestIndex = -1;
+  for (let i = checks.length - 1; i >= 0; i -= 1) {
+    if (checks[i].layer === entry.layer) {
+      latestIndex = i;
+      break;
+    }
+  }
+  const latest = latestIndex >= 0 ? checks[latestIndex] : null;
+  if (
+    latest
+    && latest.outcome === entry.outcome
+    && emailListsMatch(latest.saved.join(";"), entry.saved.join(";"))
+    && emailListsMatch(latest.routed.join(";"), entry.routed.join(";"))
+  ) {
+    const count = (latest.count ?? 1) + 1;
+    checks[latestIndex] = {
+      ...latest,
+      ...entry,
+      firstAt: latest.firstAt ?? latest.at,
+      count,
+    };
+    return { data: { ...data, checks }, isNew: false, count };
+  }
+  checks.push(entry);
+  return { data: { ...data, checks: checks.slice(-MAX_ROUTING_CHECKS) }, isNew: true, count: 1 };
 }
 
 export function getWorkflowAssignment(
