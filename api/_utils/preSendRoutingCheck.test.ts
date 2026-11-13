@@ -10,7 +10,7 @@ const graph = vi.hoisted(() => ({
   queryListItemById: vi.fn(),
   updateListItemFields: vi.fn(async (_token: string, _list: string, _id: string, _fields: Record<string, unknown>) => ({})),
   queryMasterFormByTitle: vi.fn(),
-  queryWebFormVersion: vi.fn(),
+  queryListItemByFields: vi.fn(),
   queryListItems: vi.fn(),
   getListColumns: vi.fn(),
   graphFieldEquals: (column: string, value: string) => `fields/${column} eq '${value}'`,
@@ -93,7 +93,7 @@ beforeEach(() => {
     return {};
   });
   graph.queryMasterFormByTitle.mockResolvedValue({ id: "1", fields: { Title: FORM, CurrentVersion: "1.0", CurrentPublishKey: "production" } });
-  graph.queryWebFormVersion.mockResolvedValue({
+  graph.queryListItemByFields.mockResolvedValue({
     id: "2",
     fields: { SurveyJSON: JSON.stringify({ surveyJson: { pages: [{ elements: [{ type: "text", name: "employeeName", title: "Employee name" }] }] }, layerConfig: { layers: LAYERS } }) },
   });
@@ -264,18 +264,63 @@ describe("checkBeforeSend", () => {
     expect(readRoutingChecks(stored.WorkflowAssignmentData)).toMatchObject([{ outcome: "left-alone" }]);
   });
 
-  it("leaves a step already parked alone and sends nothing new", async () => {
-    stored = row({ L2_Status: "Needs Routing", L2_Email: "", L2_Emails: "", L2_NotifyEmails: "" });
+  it("leaves a step it parked on an earlier run alone: no notice, no change to who may act", async () => {
+    delete directory["staff@pmw.com"];
+    await expect(check()).resolves.toMatchObject({ outcome: "held-no-routing" });
+    vi.clearAllMocks();
+
     const result = await check();
     expect(result).toMatchObject({ outcome: "not-checkable", hold: false, recipients: [] });
     expect(stored.L2_Status).toBe("Needs Routing");
+    expect(patches().some((patch) => Object.keys(patch).some((key) => key.startsWith("L2_")))).toBe(false);
     expect(mail.sendGraphEmail).not.toHaveBeenCalled();
   });
 
+  it("leaves a decided step alone, with no write", async () => {
+    stored = row({ L2_Status: "Confirmed", L2_Email: "old.hod@pmw.com", L2_Emails: "old.hod@pmw.com", L2_NotifyEmails: "old.hod@pmw.com" });
+    await expect(check()).resolves.toMatchObject({ outcome: "not-checkable", hold: false, recipients: ["old.hod@pmw.com"] });
+    expect(graph.updateListItemFields).not.toHaveBeenCalled();
+  });
+
+  it("leaves a closed submission alone, with no write", async () => {
+    stored = row({ FormStatus: "Rejected", L2_Email: "old.hod@pmw.com", L2_Emails: "old.hod@pmw.com", L2_NotifyEmails: "old.hod@pmw.com" });
+    await expect(check()).resolves.toMatchObject({ outcome: "not-checkable", hold: false });
+    expect(graph.updateListItemFields).not.toHaveBeenCalled();
+  });
+
+  it("holds without writing who may act when the submission's version cannot be read, and reads again next time", async () => {
+    stored = row({ PublishKey: "hr-only", L2_Email: "old.hod@pmw.com", L2_Emails: "old.hod@pmw.com", L2_NotifyEmails: "old.hod@pmw.com" });
+    // The Master Form's current workflow would route this step elsewhere; it must not be used.
+    graph.queryMasterFormByTitle.mockResolvedValue({
+      id: "1", fields: { Title: FORM, CurrentVersion: "2.0", LayerConfig: JSON.stringify({ layers: LAYERS }) },
+    });
+    const cache = createPreSendCheckCache("tok");
+    graph.queryListItemByFields.mockResolvedValueOnce(null);
+    await expect(check({ cache })).resolves.toMatchObject({ outcome: "held-check-failed", hold: true, recipients: [] });
+    graph.queryListItemByFields.mockRejectedValueOnce(new Error("Graph GET 503"));
+    await expect(check({ cache })).resolves.toMatchObject({ outcome: "held-check-failed", hold: true });
+    expect(patches().some((patch) => Object.keys(patch).some((key) => key.startsWith("L2_")))).toBe(false);
+    expect(stored.L2_Email).toBe("old.hod@pmw.com");
+    expect(graph.queryListItemByFields).toHaveBeenCalledTimes(2);
+    expect(graph.queryListItemByFields.mock.calls[0][2]).toEqual({ FormTitle: FORM, FormVersion: "1.0", PublishKey: "hr-only" });
+
+    await expect(check({ cache })).resolves.toMatchObject({ outcome: "corrected" });
+    expect(graph.queryListItemByFields).toHaveBeenCalledTimes(3);
+  });
+
+  it("uses the Master Form's workflow for an older row that records no form version", async () => {
+    stored = row({ FormVersion: "", PublishKey: "" });
+    graph.queryMasterFormByTitle.mockResolvedValue({
+      id: "1", fields: { Title: FORM, CurrentVersion: "1.0", LayerConfig: JSON.stringify({ layers: LAYERS }) },
+    });
+    await expect(check()).resolves.toMatchObject({ outcome: "match" });
+    expect(graph.queryListItemByFields).not.toHaveBeenCalled();
+  });
+
   it("skips a form that is not switched on, without reading anything", async () => {
-    const result = await check({ formTitle: "Leave Application", fields: row() });
-    expect(result).toMatchObject({ outcome: "skipped", hold: false, recipients: ["hod@pmw.com"] });
-    for (const fn of [graph.queryListItemById, graph.queryListItems, graph.getListColumns, graph.queryMasterFormByTitle, graph.queryWebFormVersion, graph.updateListItemFields]) {
+    const result = await check({ formTitle: "Leave Application" });
+    expect(result).toMatchObject({ outcome: "skipped", hold: false, recipients: [] });
+    for (const fn of [graph.queryListItemById, graph.queryListItems, graph.getListColumns, graph.queryMasterFormByTitle, graph.queryListItemByFields, graph.updateListItemFields]) {
       expect(fn).not.toHaveBeenCalled();
     }
   });
@@ -294,7 +339,7 @@ describe("checkBeforeSend", () => {
     await check({ cache, itemId: "8" });
     expect(graph.getListColumns).toHaveBeenCalledTimes(1);
     expect(graph.queryMasterFormByTitle).toHaveBeenCalledTimes(1);
-    expect(graph.queryWebFormVersion).toHaveBeenCalledTimes(1);
+    expect(graph.queryListItemByFields).toHaveBeenCalledTimes(1);
     const personReads = graph.queryListItems.mock.calls.filter((call) => String(call[2]?.filter ?? "").includes("staff@pmw.com"));
     expect(personReads).toHaveLength(1);
   });

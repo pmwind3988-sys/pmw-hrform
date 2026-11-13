@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { pickLayerByNumber } from "../evaluate.js";
+import { branchLayers } from "./layerPick.js";
 
 const approval = (layerNumber: number, extra: Record<string, unknown> = {}) =>
   ({ layerNumber, type: "approval", authMode: "365", ...extra });
@@ -47,5 +48,22 @@ describe("pickLayerByNumber", () => {
     expect(pickLayerByNumber(null, "", 2)).toBeNull();
     expect(pickLayerByNumber({ layers: [approval(1)] }, "", 0)).toBeNull();
     expect(pickLayerByNumber({ layers: [approval(1)] }, "", 5)).toBeNull();
+  });
+});
+
+describe("branchLayers", () => {
+  const config = {
+    layers: [approval(1)],
+    manualBranches: [{ name: "long", label: "Long Route", layers: [approval(1), evaluation(2)] }],
+  };
+  it("returns the named branch, by name or label, ignoring casing", () => {
+    expect(branchLayers(config, "long")).toHaveLength(2);
+    expect(branchLayers(config, "  long route ")).toHaveLength(2);
+  });
+  it("is null with no branch named, an unknown branch, or no config", () => {
+    expect(branchLayers(config, "")).toBeNull();
+    expect(branchLayers(config, "short")).toBeNull();
+    expect(branchLayers(null, "long")).toBeNull();
+    expect(branchLayers({ layers: [approval(1)] }, "long")).toBeNull();
   });
 });

@@ -33,7 +33,7 @@ import { requireSignedInViewer } from "./_utils/viewerIdentity.js";
 import { recordTestRunSteps, type TestRunStepDeps } from "./_utils/testRunActions.js";
 import { sharePointTokenFrom, testRunTesterMayAct } from "./_utils/testRunReviewer.js";
 import type { TestRunStep } from "./_utils/testRunTrail.js";
-import { pickLayerByNumber } from "./_utils/layerPick.js";
+import { branchLayers, pickLayerByNumber } from "./_utils/layerPick.js";
 import { readReviewQueue } from "./_utils/reviewQueue.js";
 import { loadSubmissionLayerConfig, parseVersionPayload } from "./_utils/submissionLayerConfig.js";
 
@@ -999,15 +999,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     // because on a branched form the same layer number describes a different
     // step per branch.
     const selectedBranch = typeof itemFields.SelectedBranch === "string" ? itemFields.SelectedBranch.trim().toLowerCase() : "";
-    const activeLayers = (() => {
-      if (selectedBranch && layerConfigParsed?.manualBranches?.length) {
-        const branch = layerConfigParsed.manualBranches.find((b) =>
-          [b.name, b.label].some((candidate) => typeof candidate === "string" && candidate.trim().toLowerCase() === selectedBranch)
-        );
-        if (branch?.layers?.length) return branch.layers;
-      }
-      return layerConfigParsed?.layers ?? [];
-    })();
+    const onBranch = branchLayers(layerConfigParsed, selectedBranch);
+    const activeLayers = onBranch?.length ? onBranch : layerConfigParsed.layers ?? [];
 
     // Find the layer this decision is for. A public link names it with its own
     // token; a signed-in one carries only the number, so the branch decides.

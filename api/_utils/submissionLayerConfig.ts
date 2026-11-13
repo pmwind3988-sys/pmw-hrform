@@ -7,7 +7,7 @@
  * check, which must agree on it: a check against a different workflow than the
  * reviewer page then opens would correct a step to the wrong people.
  */
-import { queryWebFormVersion } from "./graphClient.js";
+import { queryListItemByFields, queryWebFormVersion } from "./graphClient.js";
 
 export interface SubmissionLayerConfig {
   layers: Record<string, unknown>[];
@@ -48,17 +48,44 @@ export function submissionVersionKey(
  * The layer config and survey JSON for one submission. `layerConfig` is null
  * when neither the version nor the Master Form holds a parseable one;
  * `surveyJson` is null when the version row could not be read.
+ *
+ * `strict` is for callers that act on the answer by changing who may act (the
+ * pre-send routing check). It reads exactly the version and publish key the
+ * row records and throws when that row cannot be read, instead of quietly using
+ * the Master Form's current workflow, which the submission may not have been
+ * made under. Only a row that records no form version (older submissions) falls
+ * back to the Master Form, as the reviewer page does; so does a version row
+ * that was read but carries no layer config.
  */
 export async function loadSubmissionLayerConfig(
   token: string,
   formTitle: string,
   formConfig: Record<string, unknown>,
   itemFields: Record<string, unknown>,
+  options: { strict?: boolean } = {},
 ): Promise<{ layerConfig: SubmissionLayerConfig | null; surveyJson: unknown }> {
-  const { formVersion, publishKey } = submissionVersionKey(formConfig, itemFields);
-  const versionRow = formVersion
-    ? (await queryWebFormVersion(token, formTitle, formVersion, publishKey || undefined))?.fields
-    : null;
+  let versionRow: Record<string, unknown> | null | undefined;
+  if (options.strict) {
+    const recordedVersion = String(itemFields.FormVersion || "").trim();
+    const recordedKey = String(itemFields.PublishKey || "").trim();
+    if (recordedVersion) {
+      // queryWebFormVersion falls back past a failed or empty keyed read; this must not.
+      const row = await queryListItemByFields(token, "Web Form Versions", {
+        FormTitle: formTitle,
+        FormVersion: recordedVersion,
+        ...(recordedKey ? { PublishKey: recordedKey } : {}),
+      });
+      if (!row || parseVersionPayload(row.fields.SurveyJSON).surveyJson === null) {
+        throw new Error("The form version this submission was made under could not be read.");
+      }
+      versionRow = row.fields;
+    }
+  } else {
+    const { formVersion, publishKey } = submissionVersionKey(formConfig, itemFields);
+    versionRow = formVersion
+      ? (await queryWebFormVersion(token, formTitle, formVersion, publishKey || undefined))?.fields
+      : null;
+  }
   const versionPayload = parseVersionPayload(versionRow?.SurveyJSON);
 
   let layerConfig: SubmissionLayerConfig | null = null;

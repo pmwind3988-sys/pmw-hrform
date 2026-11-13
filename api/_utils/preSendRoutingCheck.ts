@@ -29,7 +29,6 @@ import { createApprovalDirectoryReader } from "./approvalDirectory.js";
 import { resolveDepartmentApproverFromList } from "./departmentApproverLookup.js";
 import { expandDistributionList } from "./groupMembers.js";
 import {
-  isDirectoryGap,
   resolveLayerAssignee,
   valueToText,
   type ResolvableAssignee,
@@ -60,12 +59,9 @@ import {
   type LayerNotifyConfig,
 } from "./layerRecipients.js";
 import { isTestRow } from "./testRun.js";
-import { pickLayerByNumber } from "./layerPick.js";
-import {
-  loadSubmissionLayerConfig,
-  submissionVersionKey,
-  type SubmissionLayerConfig,
-} from "./submissionLayerConfig.js";
+import { branchLayers, pickLayerByNumber } from "./layerPick.js";
+import { isTerminalFormStatus, isTerminalLayerStatus } from "./layerItemAccess.js";
+import { loadSubmissionLayerConfig, type SubmissionLayerConfig } from "./submissionLayerConfig.js";
 import { forEachSurveyElement } from "./surveyWalk.js";
 import {
   buildRoutingHoldNoticeEmail,
@@ -128,8 +124,6 @@ export interface PreSendCheckParams {
   layer: number;
   trigger: RoutingCheckTrigger;
   cache?: PreSendCheckCache;
-  /** Row already in hand; re-read when omitted. */
-  fields?: Record<string, unknown>;
   /** The response list's name, when it is not the form title (e.g. "{title} Responses"). */
   listTitle?: string;
 }
@@ -169,10 +163,13 @@ function loadWorkflow(
   formConfig: Record<string, unknown>,
   fields: Record<string, unknown>,
 ): Promise<SubmissionWorkflow> {
-  const { formVersion, publishKey } = submissionVersionKey(formConfig, fields);
-  const key = [formTitle.trim().toLowerCase(), formVersion, publishKey].join("|");
+  const key = [
+    formTitle.trim().toLowerCase(),
+    String(fields.FormVersion || "").trim(),
+    String(fields.PublishKey || "").trim(),
+  ].join("|");
   return remember(cache.workflows, key, async () => {
-    const loaded = await loadSubmissionLayerConfig(token, formTitle, formConfig, fields);
+    const loaded = await loadSubmissionLayerConfig(token, formTitle, formConfig, fields, { strict: true });
     if (!loaded.layerConfig || !Array.isArray(loaded.layerConfig.layers)) {
       throw new Error("The workflow this submission was made under could not be read.");
     }
@@ -182,13 +179,8 @@ function loadWorkflow(
 
 /** The steps this submission runs through, honouring the branch it took. */
 function activeLayers(config: SubmissionLayerConfig, selectedBranch: string): Record<string, unknown>[] {
-  const branchKey = selectedBranch.trim().toLowerCase();
-  if (branchKey && config.manualBranches?.length) {
-    const branch = config.manualBranches.find((entry) =>
-      [entry.name, entry.label].some((candidate) => typeof candidate === "string" && candidate.trim().toLowerCase() === branchKey));
-    if (branch?.layers?.length) return branch.layers;
-  }
-  return config.layers ?? [];
+  const onBranch = branchLayers(config, selectedBranch);
+  return onBranch?.length ? onBranch : config.layers ?? [];
 }
 
 /** A stored layer narrowed to what the check reads; null when it cannot be routed at all. */
@@ -274,8 +266,11 @@ function serverPorts(
                 String(layer.title || `Layer ${layer.layerNumber}`),
               );
             } catch (error) {
-              // "Nobody is listed for that department" is an answer; a failed read is not.
-              if (!isDirectoryGap(error)) failure ??= error;
+              // Not reached in practice: the check routes a "Department approver"
+              // step through the Routing page, never this list. Should it be, any
+              // error here ("nobody listed" included) is a failed check, because
+              // this list is not what the check compares against.
+              failure ??= error;
               throw error;
             }
           },
@@ -423,15 +418,16 @@ export async function checkBeforeSend(token: string, params: PreSendCheckParams)
   const listTitle = params.listTitle || formTitle;
 
   if (!isRoutingCheckedForm(formTitle)) {
-    const fields = params.fields ?? {};
-    const stored = storedPeople(fields, layer);
-    return finish(params, { outcome: "skipped", hold: false, recipients: stored.recipients, primary: stored.primary, fields });
+    // Not checked: nothing is read, and the caller sends with what it has.
+    return finish(params, { outcome: "skipped", hold: false, recipients: [], primary: "", fields: {} });
   }
 
-  let fields = params.fields;
+  let fields: Record<string, unknown> | undefined;
   let facts: StepFacts | undefined;
   try {
-    fields ??= (await queryListItemById(token, listTitle, itemId))?.fields;
+    // Always the row as stored now, never a caller's copy: the test-run skip
+    // and the decided-step guards must not depend on what a caller selected.
+    fields = (await queryListItemById(token, listTitle, itemId))?.fields;
     if (!fields) throw new Error("The submission could not be read.");
     const row = fields;
     const stored = storedPeople(row, layer);
@@ -459,6 +455,12 @@ export async function checkBeforeSend(token: string, params: PreSendCheckParams)
     const currentLayer = Number(row.CurrentLayer || row.CurrentApprovalLayer || 0) || 1;
     if (layer < currentLayer) {
       return finish(params, unchanged("not-checkable", "This step has already been passed."));
+    }
+    if (
+      isTerminalFormStatus(row.FormStatus) || isTerminalFormStatus(row.Status)
+      || isTerminalLayerStatus(row[`L${layer}_Status`])
+    ) {
+      return finish(params, unchanged("not-checkable", "This step or submission has already been decided."));
     }
 
     const { verdict, routedPrimary, checkFailed } = await inspectLayerRouting(
