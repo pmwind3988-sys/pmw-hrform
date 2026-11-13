@@ -105,6 +105,12 @@ export function createPreSendCheckCache(token: string): PreSendCheckCache {
   };
 }
 
+/**
+ * On `skipped` (form not switched on, or a test run) the caller proceeds
+ * exactly as it would have without the check, using its own recipients:
+ * `recipients` and `primary` are empty then, and `recipients`, `primary` and
+ * `fields` are only meaningful for the other outcomes.
+ */
 export interface PreSendCheckResult {
   outcome: RoutingCheckOutcome | "skipped";
   /** true when the caller must not send the action email. */
@@ -432,7 +438,25 @@ export async function checkBeforeSend(token: string, params: PreSendCheckParams)
     const row = fields;
     const stored = storedPeople(row, layer);
     if (isTestRow(row)) {
-      return finish(params, { outcome: "skipped", hold: false, recipients: stored.recipients, primary: stored.primary, fields: row });
+      return finish(params, { outcome: "skipped", hold: false, recipients: [], primary: "", fields: row });
+    }
+
+    const unchanged = (outcome: RoutingCheckOutcome, reason?: string): PreSendCheckResult => ({
+      outcome, hold: false, recipients: stored.recipients, primary: stored.primary, fields: row,
+      ...(reason ? { reason } : {}),
+    });
+
+    // Settled from the row alone, before any other read: a step that is
+    // finished with is never written to, even when a later read would fail.
+    const currentLayer = Number(row.CurrentLayer || row.CurrentApprovalLayer || 0) || 1;
+    if (layer < currentLayer) {
+      return finish(params, unchanged("not-checkable", "This step has already been passed."));
+    }
+    if (
+      isTerminalFormStatus(row.FormStatus) || isTerminalFormStatus(row.Status)
+      || isTerminalLayerStatus(row[`L${layer}_Status`])
+    ) {
+      return finish(params, unchanged("not-checkable", "This step or submission has already been decided."));
     }
 
     const cache = params.cache ?? createPreSendCheckCache(token);
@@ -446,22 +470,6 @@ export async function checkBeforeSend(token: string, params: PreSendCheckParams)
       layerType: target.type === "evaluation" ? "evaluation" : "approval",
       totalLayers: activeLayers(workflow.layerConfig, selectedBranch).length || layer,
     };
-
-    const unchanged = (outcome: RoutingCheckOutcome, reason?: string): PreSendCheckResult => ({
-      outcome, hold: false, recipients: stored.recipients, primary: stored.primary, fields: row,
-      ...(reason ? { reason } : {}),
-    });
-
-    const currentLayer = Number(row.CurrentLayer || row.CurrentApprovalLayer || 0) || 1;
-    if (layer < currentLayer) {
-      return finish(params, unchanged("not-checkable", "This step has already been passed."));
-    }
-    if (
-      isTerminalFormStatus(row.FormStatus) || isTerminalFormStatus(row.Status)
-      || isTerminalLayerStatus(row[`L${layer}_Status`])
-    ) {
-      return finish(params, unchanged("not-checkable", "This step or submission has already been decided."));
-    }
 
     const { verdict, routedPrimary, checkFailed } = await inspectLayerRouting(
       target, row, currentLayer, serverPorts(token, cache, workflow),

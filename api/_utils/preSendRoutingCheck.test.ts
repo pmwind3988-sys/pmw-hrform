@@ -305,7 +305,30 @@ describe("checkBeforeSend", () => {
     expect(graph.queryListItemByFields.mock.calls[0][2]).toEqual({ FormTitle: FORM, FormVersion: "1.0", PublishKey: "hr-only" });
 
     await expect(check({ cache })).resolves.toMatchObject({ outcome: "corrected" });
-    expect(graph.queryListItemByFields).toHaveBeenCalledTimes(3);
+    // The profile row, then the default profile's row for its questions.
+    expect(graph.queryListItemByFields).toHaveBeenCalledTimes(4);
+    expect(graph.queryListItemByFields.mock.calls[3][2]).toEqual({ FormTitle: FORM, FormVersion: "1.0", PublishKey: "production" });
+  });
+
+  it("holds when the default profile's questions cannot be read for a non-default profile", async () => {
+    stored = row({ PublishKey: "hr-only" });
+    graph.queryListItemByFields
+      .mockResolvedValueOnce({ id: "3", fields: { SurveyJSON: JSON.stringify({ surveyJson: { pages: [] }, layerConfig: { layers: LAYERS } }) } })
+      .mockRejectedValueOnce(new Error("Graph GET 503"));
+    await expect(check()).resolves.toMatchObject({ outcome: "held-check-failed", hold: true });
+    expect(patches().some((patch) => Object.keys(patch).some((key) => key.startsWith("L2_")))).toBe(false);
+  });
+
+  it("settles a decided step from the row alone: no write and no notice when later reads would fail", async () => {
+    stored = row({ L2_Status: "Approved" });
+    graph.queryMasterFormByTitle.mockRejectedValue(new Error("Graph GET 503"));
+    graph.queryListItemByFields.mockRejectedValue(new Error("Graph GET 503"));
+    for (let run = 0; run < FAILED_CHECKS_BEFORE_ATTENTION + 1; run += 1) {
+      await expect(check()).resolves.toMatchObject({ outcome: "not-checkable", hold: false });
+    }
+    expect(graph.updateListItemFields).not.toHaveBeenCalled();
+    expect(graph.queryMasterFormByTitle).not.toHaveBeenCalled();
+    expect(mail.sendGraphEmail).not.toHaveBeenCalled();
   });
 
   it("uses the Master Form's workflow for an older row that records no form version", async () => {
@@ -328,7 +351,7 @@ describe("checkBeforeSend", () => {
   it("skips a test run", async () => {
     stored = row({ IsTest: true, TestEmail: "tester@pmw.com", L2_Email: "old.hod@pmw.com", L2_Emails: "old.hod@pmw.com", L2_NotifyEmails: "old.hod@pmw.com" });
     const result = await check();
-    expect(result).toMatchObject({ outcome: "skipped", hold: false, recipients: ["old.hod@pmw.com"] });
+    expect(result).toMatchObject({ outcome: "skipped", hold: false, recipients: [], primary: "" });
     expect(graph.updateListItemFields).not.toHaveBeenCalled();
     expect(graph.queryMasterFormByTitle).not.toHaveBeenCalled();
   });

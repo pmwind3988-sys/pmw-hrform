@@ -33,6 +33,47 @@ export function parseVersionPayload(raw: unknown): { surveyJson: unknown; meta: 
   }
 }
 
+const DEFAULT_PUBLISH_KEY = "production";
+
+/**
+ * A publish profile's questions come from the default profile of the same
+ * version, as `queryWebFormVersion` serves them (`withDefaultProfileContent` in
+ * graphClient.ts): the profile row's own copy of the survey is never updated
+ * after it is saved. Same rule, except that a failed read throws instead of
+ * quietly keeping the profile's stale copy. A default row that does not exist
+ * or carries no survey keeps the profile's own, exactly as there.
+ */
+async function withDefaultProfileSurvey(
+  token: string,
+  formTitle: string,
+  formVersion: string,
+  profileRow: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const profile = parseJsonRecord(profileRow.SurveyJSON);
+  if (!profile) return profileRow;
+  const baseRow = await queryListItemByFields(token, "Web Form Versions", {
+    FormTitle: formTitle,
+    FormVersion: formVersion,
+    PublishKey: DEFAULT_PUBLISH_KEY,
+  });
+  const base = parseJsonRecord(baseRow?.fields.SurveyJSON);
+  if (!base?.surveyJson) return profileRow;
+  return {
+    ...profileRow,
+    SurveyJSON: JSON.stringify({ ...profile, surveyJson: base.surveyJson, meta: base.meta ?? profile.meta }),
+  };
+}
+
+function parseJsonRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Which version and profile a submission was made under. */
 export function submissionVersionKey(
   formConfig: Record<string, unknown>,
@@ -79,6 +120,9 @@ export async function loadSubmissionLayerConfig(
         throw new Error("The form version this submission was made under could not be read.");
       }
       versionRow = row.fields;
+      if (recordedKey && recordedKey !== DEFAULT_PUBLISH_KEY) {
+        versionRow = await withDefaultProfileSurvey(token, formTitle, recordedVersion, versionRow);
+      }
     }
   } else {
     const { formVersion, publishKey } = submissionVersionKey(formConfig, itemFields);
