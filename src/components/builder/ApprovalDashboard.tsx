@@ -64,20 +64,11 @@ import { getDepartmentApproverLookupConfig } from "../../utils/departmentApprove
 import {
   DirectoryGapError,
   addStandIns,
-  isDeferredAssignee,
-  stripFieldReference,
   resolveLayerAssignee as resolveSharedLayerAssignee,
   type ResolvableLayer,
 } from "../../utils/resolveAssignee";
-import { forEachSurveyElement } from "../../utils/surveyWalk";
-import { createApprovalDirectoryReader, loadApprovalDirectory } from "../../utils/approvalDirectory";
-import {
-  optionsFromSubmittedData,
-  subjectFieldMapping,
-  harvestFieldValue,
-  isPersonEmail,
-  readHarvestConfig,
-} from "../../utils/directoryHarvest";
+import { createApprovalDirectoryReader } from "../../utils/approvalDirectory";
+import { isPersonEmail } from "../../utils/directoryHarvest";
 import { resolveEvaluationSubmitterRouting } from "../../utils/evaluationSubmitterRouting";
 import { getWorkflowEmailStatus, overdueDays } from "../../utils/workflowEmailLog";
 import {
@@ -87,7 +78,7 @@ import {
   updateScheduledWorkflowEmailRecipient,
 } from "../../utils/workflowEmailSchedule";
 import { getWorkflowAssignment, setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentData";
-import { classifyLayerRouting, findDirectoryPerson } from "../../utils/routingCheck";
+import { inspectLayerRouting as inspectSharedLayerRouting, type InspectableLayer } from "../../utils/routingInspect";
 import type { LayerRoutingVerdict } from "../../utils/routingCheck";
 import RoutingCheckPanel from "./RoutingCheckPanel";
 import ReadOnlySubmissionPreview from "./ReadOnlySubmissionPreview";
@@ -724,76 +715,6 @@ async function withDirectoryStandIns(token: string, primary: string): Promise<st
     { lookupPerson: createApprovalDirectoryReader(token).lookupPerson },
   );
   return resolved.emails;
-}
-
-/**
- * Who a submission is about, found from its own answers, and who approves them
- * according to the routing page.
- *
- * For a submission with no usable submitter address — a public link — the
- * employee on the form is the only person there is to route from. The form's
- * directory-harvest mapping says which questions hold them; without one the
- * questions are guessed from their labels. The staff number decides first, then
- * the address, then the name, the same order the harvester matches in.
- */
-async function findApproverOfFormSubject(
-  token: string,
-  rawItem: Record<string, unknown>,
-  layerConfig: unknown,
-  surveyJson: unknown,
-): Promise<{ email: string; explanation: string } | { problem: string }> {
-  // The form's own question titles say what each answer is far better than the
-  // stored column names do, which often run words together ("employeeName").
-  const options: { name: string; title: string }[] = [];
-  forEachSurveyElement(surveyJson, (element) => {
-    const name = typeof element.name === "string" ? element.name : "";
-    if (name) options.push({ name, title: typeof element.title === "string" ? element.title : name });
-  });
-  for (const option of optionsFromSubmittedData(rawItem)) {
-    if (!options.some((existing) => existing.name === option.name)) options.push({ name: option.name, title: option.title ?? option.name });
-  }
-  const harvest = readHarvestConfig(layerConfig);
-  const mapping = subjectFieldMapping(layerConfig, options);
-  const submittedEmail = harvestFieldValue(rawItem, mapping.emailField);
-  const email = isPersonEmail(submittedEmail) ? submittedEmail.trim().toLowerCase() : "";
-  const employeeId = harvestFieldValue(rawItem, mapping.employeeIdField).trim();
-  const name = harvestFieldValue(rawItem, mapping.nameField).trim();
-  if (!email && !employeeId && !name) {
-    return {
-      problem: "The form has no usable submitter address, and no employee email, staff number or name could be found to look up on the routing page."
-        + ` Fields tried (${harvest ? "form settings" : "guessed from labels"}): name = ${mapping.nameField || "none"}, staff number = ${mapping.employeeIdField || "none"}, email = ${mapping.emailField || "none"}.`,
-    };
-  }
-
-  const directory = await loadApprovalDirectory(token);
-  if (!directory.usable) return { problem: "The Approval Directory could not be read." };
-  const rows = directory.rows.filter((row) => row.isActive && row.confirmed);
-  const person = findDirectoryPerson(rows, { email, employeeId, name });
-  if (!person) {
-    return { problem: "The employee on the form is not in the Approval Directory (checked staff number, email and name), so the routing page has no approver for them." };
-  }
-  const approver = person.approverEmail.trim().toLowerCase();
-  if (!EMAIL_RE.test(approver)) {
-    return { problem: `${person.personName || person.personEmail} has no approver on the routing page.` };
-  }
-  return {
-    email: approver,
-    explanation: `Routing page (Approval Directory): ${person.personName || person.personEmail}${person.employeeId ? ` (${person.employeeId})` : ""}, taken from the form's answers, is approved by ${approver}.`,
-  };
-}
-
-/** Where a layer's people come from, for assignee types that explain nothing themselves. */
-function describeAssigneeSource(layer: LayerConfigItem): string {
-  const assignee = layer.assignee as { type: string; value?: string };
-  const value = (assignee.value ?? "").trim();
-  switch (assignee.type) {
-    case "user": return `A fixed person set on the workflow page (${value || "none"}). The routing page is not used for this layer.`;
-    case "users": return "A fixed list of people set on the workflow page. The routing page is not used for this layer.";
-    case "distribution-list": return `The members of ${value || "a distribution list"}. The routing page is not used for this layer.`;
-    case "field-reference": return `Whatever was answered in the form's "${stripFieldReference(value)}" question. The routing page is not used for this layer.`;
-    case "department-approver": return "The Department Approver Directory entry for the submitted department.";
-    default: return `Layer assignee type "${assignee.type}".`;
-  }
 }
 
 function getNextWorkflowLayer(layers: LayerConfigItem[] | null | undefined, currentLayerNumber: number): LayerConfigItem | undefined {
@@ -2344,110 +2265,21 @@ export default function ApprovalDashboard() {
     Number(rawItem.CurrentLayer || rawItem.CurrentApprovalLayer || item.CurrentLayer || item.CurrentApprovalLayer || 0) || 1;
 
   /** Compares one layer's saved actors with what routing picks now. Reads only; writes nothing. */
-  const inspectLayerRouting = async (
+  const inspectLayerRouting = (
     rawItem: Record<string, unknown>,
     layer: LayerConfigItem,
     currentLayerNumber: number,
   ): Promise<{ verdict: LayerRoutingVerdict; routedPrimary: string }> => {
-    const layerNumber = layer.layerNumber;
-    const status = valueToText(rawItem[`L${layerNumber}_Status`]);
-    const saved = parseValidEmailList(rawItem[`L${layerNumber}_Emails`] || valueToText(rawItem[`L${layerNumber}_Email`]));
-    const manualOverride = getWorkflowAssignment(rawItem.WorkflowAssignmentData, layerNumber)?.source === "manual-override";
-    let holdReason: string | undefined;
-    if (isNeedsRoutingStatus(status)) {
-      holdReason = "Waiting for someone to name the person (needs routing). Use Reconfigure this submission to set it.";
-    } else if (isManualPaperWorkflowStatus(status)) {
-      holdReason = "On paper handling. Use Reconfigure this submission to change it.";
-    }
-    const waitingReason = isDeferredAssignee(layer.assignee as ResolvableLayer["assignee"]) && layerNumber > currentLayerNumber
-      ? "Depends on who acts on the earlier step, so it cannot be checked yet."
-      : undefined;
-
-    let routed: string[] = [];
-    let routedPrimary = "";
-    let routingProblem: string | undefined;
-    let how: string | undefined;
-    if (!manualOverride && !holdReason && !waitingReason) {
-      // Submission applies a layer's submitter routing rules over its normal
-      // assignee, so the check has to as well: a matching rule names the evaluator
-      // outright, or sends the step to paper handling.
-      const submitterRule = resolveEvaluationSubmitterRouting(layer, rawItem);
-      if (submitterRule?.manualPaper) {
-        routingProblem = "A submitter routing rule sends this step to paper handling. Use Reconfigure this submission to change it.";
-      } else if (submitterRule?.email) {
-        routed = parseValidEmailList(submitterRule.email);
-        routedPrimary = routed[0] ?? "";
-        how = "A submitter routing rule set on the workflow page names this evaluator.";
-        if (!routed.length) routingProblem = `The submitter routing rule names "${submitterRule.email}", which is not a valid email address.`;
-      } else {
-        try {
-          // A "Department Approver" layer reads the old Department Approver
-          // Directory list. The routing page (Approval Directory) is the source of
-          // truth, so the check follows "who approves this person" from the
-          // submitter instead, exactly as a routing-page layer would.
-          const followsRoutingPage = layer.assignee.type === "department-approver";
-          const submitterUsable = isPersonEmail(valueToText(rawItem.SubmittedBy));
-          if (followsRoutingPage && !submitterUsable) {
-            const configSource = itemLayerConfigsRef.current[getPendingItemKey(selectedItem as PendingItem)]
-              || formLayerConfigsRef.current[selectedItem?.Title ?? ""];
-            const subject = await findApproverOfFormSubject(token ?? "", rawItem, configSource, surveyJson);
-            if ("problem" in subject) {
-              routingProblem = subject.problem;
-            } else {
-              routed = [subject.email];
-              routedPrimary = subject.email;
-              how = subject.explanation;
-            }
-          } else {
-          const layerToResolve = followsRoutingPage
-            ? {
-              ...layer,
-              assignee: { type: "chain", startFrom: "submitter", value: "", hops: 1, fallback: { mode: "park" } },
-            } as unknown as LayerConfigItem
-            : layer;
-          const result = await resolveLayerAssigneeEmail(token ?? "", layerToResolve, rawItem, currentFormSlug());
-          if (followsRoutingPage && result.explanation) {
-            result.explanation = `Routing page (Approval Directory): ${result.explanation}`;
-          }
-          if (result.error) routingProblem = result.error;
-          else if (result.parked) routingProblem = result.parked.reason;
-          else {
-            routed = result.emails;
-            routedPrimary = result.email;
-            how = result.explanation || describeAssigneeSource(layer);
-          }
-          // A fallback is not the routing page's answer: the approval line could
-          // not be followed, so whoever is saved may have come from the same
-          // fallback. Say why instead of calling that a match.
-          if (routed.length && result.explanation?.startsWith("Fell back")) {
-            routingProblem = `${result.explanation} Fix the Approval Directory on the Routing page, then check again.`;
-            routed = [];
-          }
-          }
-        } catch (error) {
-          routingProblem = error instanceof Error ? error.message : "Routing could not be worked out.";
-        }
-      }
-      if (routed.length && shouldUseManualPaperForSender(layer, routedPrimary)) {
-        routed = [];
-        routingProblem = "Routing points to the paper mailbox, which needs paper handling. Use Reconfigure this submission.";
-      }
-    }
-
-    const { kind, note } = classifyLayerRouting({ saved, routed, routingProblem, manualOverride, holdReason, waitingReason });
-    return {
-      verdict: {
-        layer: layerNumber,
-        title: layer.title || `Layer ${layerNumber}`,
-        type: layer.type === "evaluation" ? "evaluation" : "approval",
-        kind,
-        saved,
-        routed,
-        ...(note ? { note } : {}),
-        ...(how ? { how } : {}),
-      },
-      routedPrimary,
-    };
+    const configSource = itemLayerConfigsRef.current[getPendingItemKey(selectedItem as PendingItem)]
+      || formLayerConfigsRef.current[selectedItem?.Title ?? ""];
+    const directory = createApprovalDirectoryReader(token ?? "", { layerConfig: configSource });
+    return inspectSharedLayerRouting(layer as InspectableLayer, rawItem, currentLayerNumber, {
+      resolveLayer: (target, item) =>
+        resolveLayerAssigneeEmail(token ?? "", target as unknown as LayerConfigItem, item, currentFormSlug()),
+      lookupSubject: directory.lookupSubject,
+      lookupPerson: directory.lookupPerson,
+      paperMailbox: CONFIGURED_MANUAL_PAPER_EMAIL,
+    });
   };
 
   const handleCheckRouting = async () => {

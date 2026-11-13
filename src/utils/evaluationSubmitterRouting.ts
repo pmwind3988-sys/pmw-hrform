@@ -1,7 +1,33 @@
-import type { EvaluationSubmitterRoutingRule, LayerConfigItem } from "../types";
+/**
+ * evaluationSubmitterRouting.ts — a layer's submitter routing rules: the first
+ * rule that matches the submission names its evaluator or sends it to paper.
+ *
+ * Mirrored at `api/_utils/evaluationSubmitterRouting.ts`; a test keeps the two
+ * identical below this header.
+ */
+
+/**
+ * One submitter routing rule, as stored on a layer. The same shape as
+ * `EvaluationSubmitterRoutingRule` in `src/types`, declared here because the
+ * server copy cannot import from src/.
+ */
+export interface SubmitterRoutingRule {
+  id: string;
+  label: string;
+  emailField?: string;
+  emailValue?: string;
+  employeeIdField?: string;
+  employeeIdValue?: string;
+  userIdField?: string;
+  userIdValue?: string;
+  fullNameField?: string;
+  fullNameValue?: string;
+  action: "assign-evaluator" | "manual-paper" | "send-to-configured-sender";
+  evaluatorEmail?: string;
+}
 
 export interface EvaluationSubmitterRoutingResult {
-  rule: EvaluationSubmitterRoutingRule;
+  rule: SubmitterRoutingRule;
   email?: string;
   manualPaper: boolean;
   sendToConfiguredSender: boolean;
@@ -24,7 +50,7 @@ function fieldValue(data: Record<string, unknown>, fieldName: string | undefined
   return found ? text(data[found]) : "";
 }
 
-function ruleMatches(rule: EvaluationSubmitterRoutingRule, data: Record<string, unknown>): boolean {
+function ruleMatches(rule: SubmitterRoutingRule, data: Record<string, unknown>): boolean {
   const expectedEmail = normalized(rule.emailValue);
   const expectedEmployeeId = normalized(rule.employeeIdValue);
   const expectedUserId = normalized(rule.userIdValue);
@@ -60,7 +86,7 @@ function ruleMatches(rule: EvaluationSubmitterRoutingRule, data: Record<string, 
 }
 
 export function resolveEvaluationSubmitterRouting(
-  layer: LayerConfigItem,
+  layer: { submitterRoutingRules?: readonly SubmitterRoutingRule[] },
   data: Record<string, unknown>,
 ): EvaluationSubmitterRoutingResult | null {
   const rule = (layer.submitterRoutingRules ?? []).find((candidate) => ruleMatches(candidate, data));

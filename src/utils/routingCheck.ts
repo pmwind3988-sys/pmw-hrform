@@ -3,6 +3,9 @@
  *
  * Pure, so the approvals page can feed it whatever the routing resolver
  * returned and the rules stay testable without a network.
+ *
+ * Mirrored at `api/_utils/routingCheck.ts`; a test keeps the two identical
+ * below this header.
  */
 import { emailListsMatch } from "./layerRecipients.js";
 import { employeeIdKey, personNameKey } from "./directoryHarvest.js";
