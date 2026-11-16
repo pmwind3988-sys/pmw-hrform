@@ -317,6 +317,23 @@ describe("checkBeforeSend", () => {
     expect(readRoutingChecks(stored.WorkflowAssignmentData)).toMatchObject([{ outcome: "left-alone", saved: ["picked@pmw.com", "pa@pmw.com"] }]);
   });
 
+  it("keeps holding a step that was named by hand but is still parked", async () => {
+    stored = row({
+      L2_Status: "Needs Routing",
+      L2_Email: "picked@pmw.com", L2_Emails: "picked@pmw.com", L2_NotifyEmails: "picked@pmw.com",
+      WorkflowAssignmentData: JSON.stringify({
+        version: 1,
+        layers: { 2: { layer: 2, email: "picked@pmw.com", source: "manual-override", updatedBy: "admin@pmw.com", updatedAt: "2026-09-01T00:00:00.000Z", history: [] } },
+      }),
+    });
+    const result = await check();
+    expect(result).toMatchObject({ outcome: "not-checkable", hold: false });
+    expect(result.reason).toMatch(/Reconfigure this submission/);
+    expect(stored.L2_Status).toBe("Needs Routing");
+    expect(patches().every((patch) => Object.keys(patch).join() === "WorkflowAssignmentData")).toBe(true);
+    expect(mail.sendGraphEmail).not.toHaveBeenCalled();
+  });
+
   it("still sends a hand-reassigned step when its check cannot be logged", async () => {
     stored = row({
       WorkflowAssignmentData: JSON.stringify({

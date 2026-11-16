@@ -602,6 +602,10 @@ function normalizeEmailAddress(value: unknown): string {
   return valueToText(value).toLowerCase();
 }
 
+/** Shown when an address is typed for a step that is still waiting for routing. */
+const PARKED_STEP_ADDRESS_MESSAGE =
+  "This step is on hold until someone is named for it. Use Reconfigure this submission to name the person; the email goes out then.";
+
 function manualPaperStatusForLayer(layer: LayerConfigItem): string {
   return layer.type === "evaluation" ? "Manual Evaluation Required" : "Manual Approval Required";
 }
@@ -2096,6 +2100,11 @@ export default function ApprovalDashboard() {
       const activeLayers = getActiveLayers(configSource, valueToText(rawItem.SelectedBranch) || item.SelectedBranch);
       const currentLayer = activeLayers.find((layer) => layer.layerNumber === currentLayerNumber);
       if (!currentLayer) throw new Error(`Layer ${currentLayerNumber} is not available in the workflow configuration.`);
+      // A parked step has no link the reviewer page would accept, so naming
+      // someone here would mail them a page that turns them away.
+      if (manualRecipient && isNeedsRoutingStatus(valueToText(rawItem[`L${currentLayerNumber}_Status`]))) {
+        throw new Error(PARKED_STEP_ADDRESS_MESSAGE);
+      }
 
       let recipient = manualRecipient || valueToText(rawItem[`L${currentLayerNumber}_Email`]);
       if (!EMAIL_RE.test(recipient)) {
@@ -2729,6 +2738,9 @@ export default function ApprovalDashboard() {
       const currentLayer = activeLayers.find((layer) => layer.layerNumber === currentLayerNumber);
       if (!currentLayer || currentLayer.type !== "evaluation") {
         throw new Error("Only the active evaluation layer can be scheduled.");
+      }
+      if (manualEmailRecipient.trim() && isNeedsRoutingStatus(valueToText(rawItem[`L${currentLayerNumber}_Status`]))) {
+        throw new Error(PARKED_STEP_ADDRESS_MESSAGE);
       }
 
       let recipient = manualEmailRecipient.trim() || valueToText(rawItem[`L${currentLayerNumber}_Email`]);

@@ -80,6 +80,10 @@ const LOG_SCOPE = "api:pre-send-routing-check";
 /** Failed checks in a row before the HR mailbox is told a step's email is stuck. */
 export const FAILED_CHECKS_BEFORE_ATTENTION = 5;
 
+/** Why a step named by hand is still held: its parked status was never cleared. */
+const PARKED_BY_HAND_NOTE =
+  "This step is still waiting for routing. Use Reconfigure this submission to name the person; the email goes out then.";
+
 const CORRECTION_REASON = "Corrected automatically to match routing";
 
 interface SubmissionWorkflow {
@@ -463,6 +467,18 @@ export async function checkBeforeSend(token: string, params: PreSendCheckParams)
     // A step reassigned by hand is never changed, so nothing else needs
     // reading: a workflow that cannot be read must not hold it either.
     if (getWorkflowAssignment(row.WorkflowAssignmentData, layer)?.source === "manual-override") {
+      // Named by hand but still parked: the reviewer page refuses a parked
+      // step, so mailing its link would hand someone a page that turns them
+      // away. Callers hold a parked step; "Reconfigure this submission" is
+      // what starts it.
+      if (isNeedsRoutingStatus(valueToText(row[`L${layer}_Status`]))) {
+        const at = new Date().toISOString();
+        const latest = readRoutingChecks(row.WorkflowAssignmentData).filter((check) => check.layer === layer).pop();
+        await writeCheckLog(token, params, listTitle, row, latest?.outcome === "held-no-routing"
+          ? { ...latest, at }
+          : { at, layer, trigger: params.trigger, outcome: "not-checkable", saved: stored.saved, routed: [], note: PARKED_BY_HAND_NOTE });
+        return finish(params, unchanged("not-checkable", PARKED_BY_HAND_NOTE));
+      }
       await writeCheckLog(token, params, listTitle, row, {
         at: new Date().toISOString(),
         layer,
