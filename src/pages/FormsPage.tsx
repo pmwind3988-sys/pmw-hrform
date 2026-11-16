@@ -6,6 +6,7 @@ import {
   EditOutlined,
   FileDownloadOutlined,
   OpenInNewOutlined,
+  SendOutlined,
   VisibilityOutlined,
 } from "@mui/icons-material";
 import { useMsal } from "@azure/msal-react";
@@ -41,6 +42,7 @@ import { buildSubmissionCsv } from "../utils/submissionCsv";
 import { downloadCsv } from "../utils/csv";
 import type { Submission } from "../types";
 import { formEmailCounts, formEmailEntries, type WaitingEmail } from "../utils/formEmailList";
+import { resendStepEmail } from "../utils/resendStepEmail";
 
 interface FormRow {
   /** The SharePoint response list title, and the form's display name. */
@@ -103,6 +105,16 @@ export default function FormsPage() {
   const [selectedEmailKey, setSelectedEmailKey] = useState<string | null>(null);
   const [findText, setFindText] = useState("");
   const [notice, setNotice] = useState("");
+  const [emailError, setEmailError] = useState("");
+  /** The row whose Resend was pressed, waiting on the yes/no. */
+  const [resendTarget, setResendTarget] = useState<WaitingEmail | null>(null);
+  const [resending, setResending] = useState(false);
+  /**
+   * Sent-email logs re-read after a resend, by submission. The submissions list
+   * is loaded once for the whole shell, so the row reads its fresh send from here
+   * until the page is next loaded.
+   */
+  const [resentLogs, setResentLogs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -180,11 +192,43 @@ export default function FormsPage() {
 
   // Submissions whose request email has gone out and that are still waiting
   // on that approver or evaluator. Admin-only: it names who was emailed.
-  const emailEntries = canUseFormBuilder ? formEmailEntries(formSubmissions) : [];
+  const emailEntries = canUseFormBuilder
+    ? formEmailEntries(formSubmissions.map((item) => {
+        const log = resentLogs[submissionKey(item)];
+        return log !== undefined && item.emailColumns ? { ...item, emailColumns: { ...item.emailColumns, logRaw: log } } : item;
+      }))
+    : [];
   const emailCounts = formEmailCounts(emailEntries);
   const showingEmails = stateTab === "emails" && canUseFormBuilder;
   const selectedEmail = emailEntries.find((entry) => entry.key === selectedEmailKey) ?? null;
   const openEmailSubmission = (entry: WaitingEmail) => setDetailItem(entry.submission);
+
+  const resendEmail = async (entry: WaitingEmail) => {
+    setResending(true);
+    setEmailError("");
+    setNotice("");
+    try {
+      const token = await acquireAccessTokenSilentOrRedirect(instance, {
+        scopes: [sharePointManageScope()],
+        account: accounts[0],
+      });
+      const result = await resendStepEmail(token, {
+        listTitle: entry.submission.listTitle,
+        itemId: Number(entry.submission.id),
+        layer: entry.layer,
+        submittedBy: entry.submission.submittedByEmail,
+        layerConfig: entry.submission.versionLayerConfig ?? entry.submission.layerConfig,
+        selectedBranch: entry.submission.selectedBranch,
+      });
+      setResentLogs((previous) => ({ ...previous, [submissionKey(entry.submission)]: result.workflowEmailLog }));
+      setNotice(`Email resent to ${result.recipients.join(", ")} for ${entry.submission.referenceNo || `#${entry.submission.id}`}.`);
+    } catch (error) {
+      setEmailError(error instanceof Error ? error.message : "Could not resend the email.");
+    } finally {
+      setResending(false);
+      setResendTarget(null);
+    }
+  };
 
   const canExport = isAdmin || canUseFormBuilder;
 
@@ -406,6 +450,41 @@ export default function FormsPage() {
       hideOnNarrow: true,
       render: (entry) => (entry.reminders ? entry.reminders : <Box component="span" sx={{ color: editorial.softMuted }}>0</Box>),
     },
+    {
+      key: "resend",
+      header: <Box component="span" sx={visuallyHidden}>Resend</Box>,
+      render: (entry) => (
+        <Box
+          component="button"
+          type="button"
+          disabled={resending}
+          onClick={(event: MouseEvent) => {
+            event.stopPropagation();
+            setResendTarget(entry);
+          }}
+          aria-label={`Resend the email for ${entry.submission.referenceNo || `#${entry.submission.id}`} to ${entry.recipient}`}
+          sx={{
+            font: "inherit",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 0.5,
+            px: 1,
+            height: 24,
+            border: `1px solid ${sap.line}`,
+            borderRadius: `${sap.radius}px`,
+            backgroundColor: sap.zebra,
+            color: editorial.navy,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            "&:disabled": { color: editorial.softMuted, cursor: "not-allowed" },
+            "& svg": { fontSize: 14 },
+          }}
+        >
+          {narrow ? null : "Resend "}
+          <SendOutlined />
+        </Box>
+      ),
+    },
   ];
 
   const counts = selectedForm?.summary ?? emptyFormSummary();
@@ -423,6 +502,11 @@ export default function FormsPage() {
       {notice && (
         <Box role="status" sx={{ fontSize: sap.fontSize, color: editorial.success, backgroundColor: editorial.successSoft, border: `1px solid ${sap.lineSoft}`, px: 1, py: 0.5 }}>
           {notice}
+        </Box>
+      )}
+      {emailError && (
+        <Box role="alert" sx={{ fontSize: sap.fontSize, color: editorial.error, backgroundColor: editorial.errorSoft, border: `1px solid ${sap.lineSoft}`, px: 1, py: 0.5 }}>
+          {emailError}
         </Box>
       )}
 
@@ -519,7 +603,7 @@ export default function FormsPage() {
             <>
               <span>
                 {showingEmails
-                  ? `${emailCounts.waiting} emailed and still waiting${emailCounts.overdue ? ` · ${emailCounts.overdue} waiting ${OVERDUE_DAYS}+ days` : ""}. Double-click a row to open its submission. To resend or reassign, use All submissions.`
+                  ? `${emailCounts.waiting} emailed and still waiting${emailCounts.overdue ? ` · ${emailCounts.overdue} waiting ${OVERDUE_DAYS}+ days` : ""}. Double-click a row to open its submission. To send to someone else, use All submissions.`
                   : "Double-click a row, or select it and press Enter, to open it"}
               </span>
               {canUseFormBuilder && (
@@ -571,6 +655,21 @@ export default function FormsPage() {
       )}
 
       <DetailModal item={detailItem} isAdmin={isAdmin} onClose={() => setDetailItem(null)} />
+
+      <ConfirmDialog
+        open={resendTarget !== null}
+        title="Resend this email?"
+        body={resendTarget
+          ? `The ${resendTarget.layerType} request for ${resendTarget.submission.referenceNo || `#${resendTarget.submission.id}`} (${getSubmitterDisplayName(resendTarget.submission)}) goes again to ${resendTarget.recipient}, with the same link. The reminder count starts again from today.`
+          : ""}
+        confirmLabel="Yes, resend"
+        cancelLabel="No"
+        busy={resending}
+        onConfirm={() => {
+          if (resendTarget) void resendEmail(resendTarget);
+        }}
+        onClose={() => setResendTarget(null)}
+      />
 
       <ConfirmDialog
         open={pendingOpen !== null}
