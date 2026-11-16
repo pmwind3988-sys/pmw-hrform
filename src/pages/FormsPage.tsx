@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type MouseEvent } from "react";
-import { Box, Chip, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { Box, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { Link } from "react-router-dom";
 import {
   ContentCopyOutlined,
@@ -40,9 +40,7 @@ import { formatDashboardDateTime, getSubmitterDisplayName } from "../utils/submi
 import { buildSubmissionCsv } from "../utils/submissionCsv";
 import { downloadCsv } from "../utils/csv";
 import type { Submission } from "../types";
-import { emailScheduleLabel, type EmailScheduleEntry } from "../utils/emailScheduleOverview";
-import { formEmailCounts, formEmailEntries } from "../utils/formEmailList";
-import { emailWhenText, STATE_TONE } from "../components/builder/emailScheduleDisplay";
+import { formEmailCounts, formEmailEntries, type WaitingEmail } from "../utils/formEmailList";
 
 interface FormRow {
   /** The SharePoint response list title, and the form's display name. */
@@ -180,16 +178,13 @@ export default function FormsPage() {
   const selectedSubmission =
     shownSubmissions.find((item) => submissionKey(item) === selectedSubmissionKey) ?? null;
 
-  // The same emails All Submissions -> Email schedule lists, for this form only.
-  // Admin-only: they name the people each step was sent to.
+  // Submissions whose request email has gone out and that are still waiting
+  // on that approver or evaluator. Admin-only: it names who was emailed.
   const emailEntries = canUseFormBuilder ? formEmailEntries(formSubmissions) : [];
   const emailCounts = formEmailCounts(emailEntries);
   const showingEmails = stateTab === "emails" && canUseFormBuilder;
   const selectedEmail = emailEntries.find((entry) => entry.key === selectedEmailKey) ?? null;
-  const openEmailSubmission = (entry: EmailScheduleEntry) => {
-    const item = formSubmissions.find((current) => Number(current.id) === entry.itemId);
-    if (item) setDetailItem(item);
-  };
+  const openEmailSubmission = (entry: WaitingEmail) => setDetailItem(entry.submission);
 
   const canExport = isAdmin || canUseFormBuilder;
 
@@ -372,41 +367,45 @@ export default function FormsPage() {
     },
   ];
 
-  const emailColumns: SapColumn<EmailScheduleEntry>[] = [
-    {
-      key: "state",
-      header: "Status",
-      nowrap: true,
-      render: (entry) => (
-        <Chip
-          size="small"
-          label={emailScheduleLabel(entry)}
-          sx={{ height: 22, ...siType.subtext, fontWeight: 600, backgroundColor: STATE_TONE[entry.state].bg, color: STATE_TONE[entry.state].fg }}
-        />
-      ),
-    },
+  const emailColumns: SapColumn<WaitingEmail>[] = [
     {
       key: "submission",
       header: "Submission",
       nowrap: true,
-      render: (entry) => {
-        const item = formSubmissions.find((current) => Number(current.id) === entry.itemId);
-        return (
-          <Box component="span">
-            <Box component="span" sx={{ fontWeight: 600, color: editorial.navy }}>{item?.referenceNo || `#${entry.itemId}`}</Box>
-            {item && <Box component="span" sx={{ color: editorial.muted }}> · {getSubmitterDisplayName(item)}</Box>}
+      render: (entry) => (
+        <Box component="span">
+          <Box component="span" sx={{ fontWeight: 600, color: editorial.navy }}>
+            {entry.submission.referenceNo || `#${entry.submission.id}`}
           </Box>
-        );
-      },
+          <Box component="span" sx={{ color: editorial.muted }}> · {getSubmitterDisplayName(entry.submission)}</Box>
+        </Box>
+      ),
     },
     {
       key: "step",
-      header: "Step",
+      header: "Waiting for",
       nowrap: true,
       render: (entry) => `Step ${entry.layer} · ${entry.layerType === "evaluation" ? "Evaluation" : "Approval"}`,
     },
     { key: "to", header: "Sent to", maxWidth: narrow ? 170 : 260, render: (entry) => entry.recipient || "—" },
-    { key: "when", header: "When", nowrap: true, render: emailWhenText },
+    { key: "sent", header: "Email sent", nowrap: true, render: (entry) => formatDashboardDateTime(entry.sentAt, "—") },
+    {
+      key: "days",
+      header: "Days waiting",
+      align: "right",
+      render: (entry) => (
+        <Box component="span" sx={entry.overdue ? { color: editorial.error, fontWeight: 600 } : undefined}>
+          {entry.daysWaiting}
+        </Box>
+      ),
+    },
+    {
+      key: "reminders",
+      header: "Reminders",
+      align: "right",
+      hideOnNarrow: true,
+      render: (entry) => (entry.reminders ? entry.reminders : <Box component="span" sx={{ color: editorial.softMuted }}>0</Box>),
+    },
   ];
 
   const counts = selectedForm?.summary ?? emptyFormSummary();
@@ -520,7 +519,7 @@ export default function FormsPage() {
             <>
               <span>
                 {showingEmails
-                  ? `${emailCounts.sent} sent · ${emailCounts.pending} pending. Double-click a row to open its submission. To send now, resend or change a date, use All submissions → Email schedule.`
+                  ? `${emailCounts.waiting} emailed and still waiting${emailCounts.overdue ? ` · ${emailCounts.overdue} waiting ${OVERDUE_DAYS}+ days` : ""}. Double-click a row to open its submission. To resend or reassign, use All submissions.`
                   : "Double-click a row, or select it and press Enter, to open it"}
               </span>
               {canUseFormBuilder && (
@@ -545,7 +544,7 @@ export default function FormsPage() {
               onSelect={(entry) => setSelectedEmailKey(entry.key)}
               onOpen={openEmailSubmission}
               pageSize={25}
-              emptyText="No workflow emails for this form yet."
+              emptyText="Nobody who has been emailed is still waiting to act on this form."
               minWidth={760}
             />
           ) : (

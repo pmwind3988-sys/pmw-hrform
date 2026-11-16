@@ -5,79 +5,57 @@ import type { Submission } from "../../types";
 
 const NOW = new Date("2026-10-15T06:00:00.000Z");
 
-function submission(id: number, entry: Record<string, unknown>, log: Record<string, unknown> | null = null, extra: Partial<Submission> = {}): Submission {
+const SENT = (sentAt: string, extra: Record<string, unknown> = {}) =>
+  ({ status: "sent", recipient: "hod@pmw-group.com", attempts: 1, lastAttemptAt: sentAt, sentAt, ...extra });
+
+function submission(
+  id: number,
+  log: Record<number, unknown> | null,
+  extra: { layer?: number; status?: string; formStatus?: string | null; isTest?: boolean } = {},
+): Submission {
+  const layer = extra.layer ?? 2;
   return {
     id: String(id),
     listTitle: "Training Evaluation Form",
     submittedByEmail: `t${id}@pmw-group.com`,
-    isTest: false,
+    formStatus: extra.formStatus === undefined ? "In Review" : extra.formStatus,
+    isTest: extra.isTest ?? false,
+    layerConfig: { version: "1.0", layers: [{ layerNumber: 1, type: "approval" }, { layerNumber: 2, type: "evaluation" }] },
     emailColumns: {
-      currentLayer: 2,
-      scheduleRaw: JSON.stringify({
-        2: {
-          layer: 2, recipient: "hod@pmw-group.com", status: "scheduled", updatedAt: "2026-10-01T00:00:00.000Z",
-          layerType: "evaluation", reviewLink: `https://pmw-hrform.vercel.app/eval/training-evaluation-form/${id}/2`,
-          dueAt: "2026-10-15T00:00:00.000Z",
-          ...entry,
-        },
-      }),
-      logRaw: log ? JSON.stringify({ 2: log }) : "",
+      currentLayer: layer,
+      scheduleRaw: "",
+      logRaw: log ? JSON.stringify(log) : "",
       assignmentRaw: "",
-      layerStatuses: {},
+      layerStatuses: extra.status ? { [layer]: extra.status } : {},
     },
-    ...extra,
-  } as Submission;
+  } as unknown as Submission;
 }
 
-const SENT_LOG = (sentAt: string) => ({ status: "sent", recipient: "hod@pmw-group.com", attempts: 1, lastAttemptAt: sentAt, sentAt });
-
 describe("formEmailEntries", () => {
-  it("lists emails still to go soonest first, then sent ones newest first", () => {
+  it("lists only steps whose email went out and that nobody has acted on, longest waiting first", () => {
     const entries = formEmailEntries([
-      submission(1, { status: "sent" }, SENT_LOG("2026-10-01T00:00:00.000Z")),
-      submission(2, { dueAt: "2027-01-10T00:00:00.000Z" }),
-      submission(3, {}),
-      submission(4, { status: "sent" }, SENT_LOG("2026-10-10T00:00:00.000Z")),
+      submission(1, { 2: SENT("2026-10-10T01:00:00.000Z") }),
+      submission(2, null), // scheduled for later: nobody asked yet
+      submission(3, { 2: SENT("2026-10-01T01:00:00.000Z", { reminders: 2 }) }),
+      submission(4, { 2: SENT("2026-10-01T01:00:00.000Z") }, { status: "Approved" }),
+      submission(5, { 2: SENT("2026-10-01T01:00:00.000Z") }, { formStatus: "Completed" }),
+      submission(6, { 1: SENT("2026-10-01T01:00:00.000Z") }), // step 1's email; now at step 2, not yet emailed
     ], NOW);
-    expect(entries.map((entry) => entry.itemId)).toEqual([3, 2, 4, 1]);
-    expect(formEmailCounts(entries)).toEqual({ sent: 2, pending: 2 });
+    expect(entries.map((entry) => entry.submission.id)).toEqual(["3", "1"]);
+    expect(entries[0]).toMatchObject({ layer: 2, layerType: "evaluation", daysWaiting: 14, overdue: true, reminders: 2 });
+    expect(entries[1]).toMatchObject({ daysWaiting: 5, overdue: false, reminders: 0 });
+    expect(formEmailCounts(entries)).toEqual({ waiting: 2, overdue: 1 });
   });
 
-  it("adds emails that went out at once, which only the sent-email log records", () => {
-    const sentAtOnce: Submission = {
-      ...submission(5, {}),
-      layerConfig: { version: "1.0", layers: [{ layerNumber: 1, type: "approval" }, { layerNumber: 2, type: "evaluation" }] },
-      emailColumns: {
-        currentLayer: 2,
-        scheduleRaw: "",
-        logRaw: JSON.stringify({
-          1: { ...SENT_LOG("2026-10-02T00:00:00.000Z"), recipient: "boss@pmw-group.com" },
-          2: SENT_LOG("2026-10-05T00:00:00.000Z"),
-        }),
-        assignmentRaw: "",
-        layerStatuses: {},
-      },
-    } as Submission;
-    const entries = formEmailEntries([sentAtOnce, submission(6, {})], NOW);
-    expect(entries.map((entry) => [entry.itemId, entry.layer, entry.layerType, entry.state])).toEqual([
-      [6, 2, "evaluation", "next-alone"],
-      [5, 2, "evaluation", "sent-alone"],
-      [5, 1, "approval", "sent-alone"],
-    ]);
-    expect(entries[2].recipient).toBe("boss@pmw-group.com");
-  });
-
-  it("does not list a scheduled email twice when the log also has it", () => {
-    const entries = formEmailEntries([submission(7, { status: "sent" }, SENT_LOG("2026-10-01T00:00:00.000Z"))], NOW);
-    expect(entries).toHaveLength(1);
-  });
-
-  it("leaves out test runs and rows without email columns", () => {
+  it("leaves out rejected, parked, paper and test-run steps", () => {
+    const sent = { 2: SENT("2026-10-10T01:00:00.000Z") };
     const entries = formEmailEntries([
-      submission(1, {}, null, { isTest: true }),
-      submission(2, {}, null, { emailColumns: undefined }),
-      submission(3, {}),
+      submission(1, sent, { status: "Rejected at Layer 2" }),
+      submission(2, sent, { status: "Needs Routing" }),
+      submission(3, sent, { status: "Manual Evaluation Required" }),
+      submission(4, sent, { isTest: true }),
+      submission(5, sent, { layer: 1 }), // log is for step 2, the row is at step 1
     ], NOW);
-    expect(entries.map((entry) => entry.itemId)).toEqual([3]);
+    expect(entries).toEqual([]);
   });
 });
