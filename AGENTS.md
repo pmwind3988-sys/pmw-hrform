@@ -103,6 +103,11 @@ A layer's `assignee` can now resolve to more than one person, and the mail can g
 - **All Submissions**: `LayerRecipientsPanel` shows each step's person, stand-ins and who decided on whose behalf. Reassigning a step or "Send now" to a new address takes **the new person's** stand-ins (`withDirectoryStandIns`) and drops everyone else, including the old PA; a scheduled email keeps its date and follows the new set. `StandInHint` previews this under both address boxes.
 - The routing check reports in-flight submissions routed before a PA was added as a mismatch; its Fix adds the PA. The same module now also runs automatically before a request email for the Training Evaluation Form; see "Routing check before a request email".
 
+### Correcting a sent submission (`/form/:formId?edit=<item id>`)
+- Opens the published form with every saved answer filled in (`answersFromItem`, `src/utils/submissionEdit.ts`; a table comes from its `_Json` copy, applied with `runtime.reset` once the form exists). Saving writes **only the changed answers** back onto the same item (`saveSubmissionEdit` in `DynamicFormPage.tsx`), deletes and rewrites a changed table's child rows, and returns before routing, reference numbering and every email: the step already waiting sees the new answers when opened. The finished screen says only "Your submission was updated".
+- **Only the submitter, signed in, while no step is decided** (`editRefusal`: `SubmittedBy` must equal the signed-in account; any `L{n}_SignedAt` or decided `L{n}_Status` refuses). Checked on open and again at save. A page-level check, not a SharePoint permission: staff with edit rights on the list could already edit an item there.
+- Signed-in path only (delegated token); no public-link edit. An answer the form no longer sends (a hidden question) keeps its saved value.
+
 ### Per-Submission Workflow Overrides
 - `/admin/submissions` and `/admin/approvals` are the same internal workflow workspace and both require HR Forms Owner + `superuser`.
 - Assigned approvers/evaluators act through `/eval/...`; that reviewer page is separate from the internal workflow workspace.

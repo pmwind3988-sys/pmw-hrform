@@ -13,7 +13,9 @@ import { useNativeForm } from "../native/useNativeForm";
 import "../native/native-form.css";
 
 import { testRunFromTicket } from "../utils/testRun";
-import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, getScopedListRows, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver } from "../utils/formBuilderSP";
+import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, getScopedListRows, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver, spDelete } from "../utils/formBuilderSP";
+import { EDIT_PARAM, EDIT_REFUSAL_MESSAGE, answersFromItem, changedAnswerNames, editRefusal, parseEditTarget, type EditRefusal } from "../utils/submissionEdit";
+import { matrixChildListName } from "../utils/matrixChildRows";
 import { SharePointHttpError, createSpClient, isSharePointAccessDeniedError } from "../utils/sharepointClient";
 import { SP_STATIC } from "../utils/spConfig";
 import { isSuperuserOnlyForm } from "../utils/superuserOnlyForms";
@@ -76,7 +78,7 @@ import { createApprovalDirectoryReader } from "../utils/approvalDirectory";
 import { NEEDS_ROUTING_LAYER_STATUS } from "../utils/submissionLifecycle";
 import { sampleAnswersFor } from "../utils/testRunLaunch";
 import { getMultiChoiceFieldNames } from "../utils/multiChoiceFields";
-import { getTabularFields, rowsToHtml, type MatrixRow, type MatrixColumn } from "../utils/matrixData";
+import { getDynamicMatrixFields, getTabularFields, rowsToHtml, type MatrixRow, type MatrixColumn } from "../utils/matrixData";
 import { readStoredGuestSession } from "../utils/guestMemberService";
 import { editorial } from "../theme/editorial";
 import { describeFailure, statusFromError } from "../utils/friendlyError";
@@ -113,6 +115,69 @@ function isOptionalSignedInSubmissionColumn(fieldName: string): boolean {
     fieldName.endsWith("_Json") ||
     fieldName.endsWith("_RowIds")
   );
+}
+
+/**
+ * The response-list columns for a set of answers: what a new submission
+ * writes, and what an edit writes for the answers that changed. Uploaded links
+ * in `skip` are written separately, as URL fields.
+ */
+function answerBody(raw: Record<string, unknown>, surveyJson: unknown, skip: Set<string>): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  const urlFieldPatchNames = skip;
+  // Dynamic matrices and table inputs have no bare SharePoint column — they
+  // are provisioned as `_Response` / `_Html` / `_Json` / `_RowIds` only (see
+  // `getSpColumnKind`). The renderer hands their answers back as a plain
+  // array of rows, which would otherwise fall through to `body[k]` below and
+  // be rejected as an unprovisioned field, failing the whole submission.
+  const tabularColumns = new Map(
+    getTabularFields(surveyJson).map(f => [f.name, f.columns]),
+  );
+  // Checkbox groups live in SharePoint MultiChoice columns, which take a
+  // real array. Everything else that arrives as an array is stored as JSON
+  // in a text column. See `getMultiChoiceFieldNames`.
+  const multiChoiceColumns = getMultiChoiceFieldNames(
+    surveyJson,
+  );
+  for (const [k, v] of Object.entries(raw)) {
+    if (urlFieldPatchNames.has(k)) continue;
+    if (tabularColumns.has(k)) {
+      const rows = (Array.isArray(v) ? v : []) as MatrixRow[];
+      if (rows.length === 0) continue;
+      body[`${k}_Response`] = rowsToHtml(tabularColumns.get(k) || [], rows);
+      body[`${k}_Json`] = JSON.stringify(rows);
+      continue;
+    }
+    if (v && typeof v === "object" && (v as Record<string, unknown>).html && (v as Record<string, unknown>).json) {
+      body[`${k}_Response`] = (v as Record<string, unknown>).html;
+      body[`${k}_Json`] = typeof (v as Record<string, unknown>).json === "string" ? (v as Record<string, unknown>).json : JSON.stringify((v as Record<string, unknown>).json);
+    } else if (Array.isArray(v)) {
+      /**
+       * A MultiChoice column takes the array itself. Stringifying it made
+       * SharePoint reject the whole item with "A 'StartArray' node was
+       * expected", so no form with a checkbox group could be submitted.
+       *
+       * `odata=nometadata` is in use throughout, so a plain JSON array is
+       * the right shape here -- the verbose
+       * `{ __metadata: { type: "Collection(Edm.String)" }, results: [...] }`
+       * form belongs to the metadata dialect this app does not speak.
+       *
+       * Every other array stays a JSON string, because its column is Text
+       * or Note and would reject an array just as firmly.
+       */
+      body[k] = multiChoiceColumns.has(k) ? v : JSON.stringify(v);
+    }
+    else if (v && typeof v === "object") {
+      if ("Url" in (v as Record<string, unknown>)) {
+        body[k] = v;
+      } else {
+        body[k] = JSON.stringify(v);
+      }
+    }
+    else if (typeof v === "number" || typeof v === "boolean") { body[k] = String(v); }
+    else { body[k] = v; }
+  }
+  return body;
 }
 
 function mapBodyToSharePointColumnKeys(
@@ -295,6 +360,96 @@ interface UrlFieldPatch {
   fieldName: string;
   url: string;
   description: string;
+}
+
+/** A submission reopened by its submitter (`?edit=`), and its answers as they were saved. */
+interface SubmissionEditTarget {
+  itemId: number;
+  before: Record<string, unknown>;
+}
+
+class SubmissionEditRefused extends Error {
+  readonly reason: Exclude<EditRefusal, "">;
+  constructor(reason: Exclude<EditRefusal, "">) {
+    super(EDIT_REFUSAL_MESSAGE[reason]);
+    this.reason = reason;
+  }
+}
+
+/**
+ * Writes a reopened submission's changed answers back onto the same response
+ * item. Nothing about its workflow is touched — reference number, steps,
+ * schedule — and no email is sent: the step already waiting sees the new
+ * answers the next time it is opened.
+ *
+ * A changed table's old child rows are removed first, so a failure there
+ * leaves the submission exactly as it was. The new rows are written last and
+ * never stop on a refused cell; the full copy (`_Json`) patched in between is
+ * what every view falls back to.
+ */
+async function saveSubmissionEdit(opts: {
+  token: string;
+  listTitle: string;
+  viewerEmail: string;
+  target: SubmissionEditTarget;
+  raw: Record<string, unknown>;
+  surveyJson: unknown;
+  urlFieldPatches: UrlFieldPatch[];
+}): Promise<void> {
+  const { token, listTitle, target, raw, surveyJson, urlFieldPatches } = opts;
+  const listUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')`;
+  const itemUrl = `${listUrl}/items(${target.itemId})`;
+
+  // Checked again now: an approver may have acted since the link was opened.
+  const item = await spGet(token, itemUrl) as Record<string, unknown>;
+  const refusal = editRefusal(item, opts.viewerEmail);
+  if (refusal) throw new SubmissionEditRefused(refusal);
+
+  const changed = changedAnswerNames(target.before, raw);
+  const uploaded = new Set(urlFieldPatches.map((patch) => patch.fieldName));
+  const full = answerBody(raw, surveyJson, uploaded);
+  const patch: Record<string, unknown> = {};
+  for (const name of changed) {
+    for (const key of [name, `${name}_Response`, `${name}_Json`]) if (key in full) patch[key] = full[key];
+  }
+
+  const tables = getDynamicMatrixFields(surveyJson).filter((table) => changed.has(table.name));
+  for (const table of tables) {
+    const childUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(matrixChildListName(listTitle, table.name))}')`;
+    const old = await spGet(token, `${childUrl}/items?$filter=ParentResponseId eq ${target.itemId}&$select=Id&$top=500`) as { value?: { Id?: number }[] };
+    for (const row of old.value ?? []) {
+      if (typeof row.Id === "number") await spDelete(token, `${childUrl}/items(${row.Id})`);
+    }
+  }
+
+  const resolveColumnKey = await getSharePointColumnKeyResolver(token, listTitle);
+  const mapped = mapBodyToSharePointColumnKeys(patch, resolveColumnKey, listTitle);
+  if (Object.keys(mapped).length > 0) await spPatch(token, itemUrl, mapped);
+
+  for (const upload of urlFieldPatches) {
+    const key = resolveColumnKey(upload.fieldName);
+    if (key) await spPatchUrlField(token, listTitle, target.itemId, key, upload.url, upload.description);
+  }
+
+  const rowIds: Record<string, unknown> = {};
+  for (const table of tables) {
+    const rows = Array.isArray(raw[table.name]) ? (raw[table.name] as Record<string, unknown>[]) : [];
+    if (rows.length === 0) {
+      rowIds[`${table.name}_RowIds`] = "[]";
+      continue;
+    }
+    const childList = await ensureMatrixChildList(token, listTitle, table.name, table.columns as MatrixColumnDef[], () => {});
+    if (!childList) continue;
+    const ids = await writeMatrixChildItems(token, childList.listName, target.itemId, rows, table.columns as MatrixColumnDef[], {
+      formTitle: listTitle,
+      formVersion: String(item.FormVersion ?? ""),
+      submittedAt: String(item.SubmittedAt ?? ""),
+      submittedBy: String(item.SubmittedBy ?? ""),
+    });
+    rowIds[`${table.name}_RowIds`] = JSON.stringify(ids);
+  }
+  const mappedRowIds = mapBodyToSharePointColumnKeys(rowIds, resolveColumnKey, listTitle);
+  if (Object.keys(mappedRowIds).length > 0) await spPatch(token, itemUrl, mappedRowIds);
 }
 
 function uploadCandidateFromValue(value: unknown): UploadCandidate | null {
@@ -666,6 +821,36 @@ const SuccessScreen = ({ formTitle, referenceNo, t, isTestRun, testEmailDisplay,
   </div>
 );
 
+/** A cheerful clipboard with a tick, for "Your submission was updated". Decorative: the heading says it. */
+const UpdatedIllustration = ({ t }: { t: FormTheme }) => (
+  <svg width="150" height="128" viewBox="0 0 150 128" aria-hidden="true" style={{ display: "block", margin: "0 auto 18px" }}>
+    <circle cx="75" cy="66" r="56" fill={t.greenPale} />
+    <path d="M22 30l2.5 6 6 2.5-6 2.5-2.5 6-2.5-6-6-2.5 6-2.5z" fill="#FBBF24" />
+    <path d="M128 20l2 4.5 4.5 2-4.5 2-2 4.5-2-4.5-4.5-2 4.5-2z" fill="#FBBF24" />
+    <circle cx="132" cy="58" r="3" fill="#FBBF24" />
+    <circle cx="18" cy="74" r="2.5" fill={t.purple} opacity="0.6" />
+    <g transform="rotate(-6 70 70)">
+      <rect x="42" y="26" width="58" height="76" rx="10" fill={t.cardBg} stroke={t.textPrimary} strokeWidth="3.5" />
+      <rect x="58" y="19" width="26" height="14" rx="5" fill={t.purple} stroke={t.textPrimary} strokeWidth="3.5" />
+      <circle cx="61" cy="55" r="4" fill={t.textPrimary} />
+      <circle cx="81" cy="55" r="4" fill={t.textPrimary} />
+      <circle cx="62.5" cy="53.5" r="1.3" fill="#fff" />
+      <circle cx="82.5" cy="53.5" r="1.3" fill="#fff" />
+      <ellipse cx="54" cy="65" rx="5" ry="3" fill="#F9A8D4" opacity="0.8" />
+      <ellipse cx="88" cy="65" rx="5" ry="3" fill="#F9A8D4" opacity="0.8" />
+      <path d="M63 66q8 9 16 0" fill="none" stroke={t.textPrimary} strokeWidth="3.5" strokeLinecap="round" />
+      <path d="M54 82h34M54 91h22" stroke={t.textPrimary} strokeWidth="3" strokeLinecap="round" opacity="0.25" />
+    </g>
+    <g transform="rotate(35 32 96)">
+      <rect x="26" y="70" width="12" height="38" rx="3" fill="#FBBF24" stroke={t.textPrimary} strokeWidth="3" />
+      <path d="M26 108l6 11 6-11z" fill="#FDE68A" stroke={t.textPrimary} strokeWidth="3" strokeLinejoin="round" />
+      <rect x="26" y="66" width="12" height="7" rx="2" fill="#F9A8D4" stroke={t.textPrimary} strokeWidth="3" />
+    </g>
+    <circle cx="106" cy="94" r="17" fill={t.green} stroke={t.textPrimary} strokeWidth="3.5" />
+    <path d="M98 94.5l5.5 5.5 10-11" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 /** Line icons for the status screens, drawn in the form theme's own colours. */
 const STATUS_ICONS = {
   cloud: (
@@ -803,6 +988,8 @@ export default function DynamicFormPage() {
   // The builder's "Simulate submission": fill with sample answers and submit
   // once loaded. Honoured only with a test ticket, so a real link cannot ask it.
   const simulateRequested = isTestRun && searchParams.get("simulate") === "1";
+  // `?edit=<item id>`: the submitter reopening their own submission to correct it before anyone has acted on it.
+  const editItemId = parseEditTarget(searchParams.get(EDIT_PARAM));
   const { locale: pdpaLocale, setLocale: setPdpaLocale, content: pdpa } = usePdpaLocale();
   const { instance, accounts, inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
@@ -840,6 +1027,11 @@ export default function DynamicFormPage() {
   const [simulateStep, setSimulateStep] = useState<"idle" | "armed" | "done" | "blocked">("idle");
   /** A test run's first review step, so the tester can go straight on to approve or evaluate it. */
   const [testRunReview, setTestRunReview] = useState<{ href: string; label: string } | null>(null);
+  /** A reopened submission: still loading, refused, unreadable, or ready with its saved answers in the form. */
+  const [editLoad, setEditLoad] = useState<
+    { status: "loading" } | { status: "refused"; reason: Exclude<EditRefusal, ""> } | { status: "failed" } | { status: "ready"; reference: string }
+  >({ status: "loading" });
+  const editTargetRef = useRef<SubmissionEditTarget | null>(null);
   const [pdpaConsentError, setPdpaConsentError] = useState("");
   /** Whether the answers being sent carry a file or a signature, which is the
    *  only reason this ever takes longer than a moment. */
@@ -1335,6 +1527,43 @@ export default function DynamicFormPage() {
   }, [paperNeedsAnalysis, nativeForm, userEmail, spToken]);
 
   /*
+    A reopened submission (`?edit=`): its saved answers fill the form, once,
+    and only for the person who sent it while no step has been decided. The
+    same check runs again at save, since an approver may act in between.
+  */
+  useEffect(() => {
+    if (!editItemId) return;
+    if (authStateSettled && !isAuthenticated) {
+      setEditLoad({ status: "refused", reason: "sign-in" });
+      return;
+    }
+    if (!formReady || !spToken || !enrichedSurveyJson || !formData || editTargetRef.current) return;
+    const listTitle = String(formData.formConfig?.Title || "");
+    let cancelled = false;
+    void (async () => {
+      try {
+        const item = await spGet(spToken, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')/items(${editItemId})`) as Record<string, unknown>;
+        if (cancelled) return;
+        const refusal = editRefusal(item, userEmail || "");
+        if (refusal) {
+          setEditLoad({ status: "refused", reason: refusal });
+          return;
+        }
+        const before = answersFromItem(enrichedSurveyJson, item);
+        editTargetRef.current = { itemId: editItemId, before };
+        // Replaces whatever the form opened with (the preparer filled in from the directory, the fixed year).
+        runtime.reset(before);
+        setEditLoad({ status: "ready", reference: String(item[REFERENCE_NO_FIELD] || "") });
+      } catch {
+        if (!cancelled) setEditLoad({ status: "failed" });
+      }
+    })();
+    return () => { cancelled = true; };
+    // `runtime` is left out on purpose: it is a fresh object every render, and this must run once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editItemId, authStateSettled, isAuthenticated, formReady, spToken, enrichedSurveyJson, formData, userEmail]);
+
+  /*
     Answers survive a forced sign-in.
 
     When Microsoft 365 stops trusting the tab the only way back is a full-page
@@ -1561,6 +1790,28 @@ export default function DynamicFormPage() {
         normalizeSharePointDateTimeFields(raw, enrichedSurveyJsonRef.current || formData?.surveyJson);
       }
 
+      // A reopened submission is written back onto its own item and stops here:
+      // no routing, no new reference number, no email to anyone.
+      const editTarget = editTargetRef.current;
+      if (editTarget) {
+        if (!token) throw new SubmissionEditRefused("sign-in");
+        try {
+          await saveSubmissionEdit({
+            token,
+            listTitle: cfg.Title as string,
+            viewerEmail: userEmail || accounts[0]?.username || "",
+            target: editTarget,
+            raw,
+            surveyJson: enrichedSurveyJsonRef.current || formData?.surveyJson,
+            urlFieldPatches,
+          });
+        } catch (e) {
+          if (e instanceof SubmissionEditRefused) setEditLoad({ status: "refused", reason: e.reason });
+          throw e;
+        }
+        return;
+      }
+
       // Step 2: Resolve layers — try LayerConfig first, fall back to old rules
       let layerConfigParsed: LayerConfig | null = null;
       const rawLayerConfig = cfg.LayerConfig as string | undefined;
@@ -1618,60 +1869,7 @@ export default function DynamicFormPage() {
       let manualPaperLayer: { layerNumber: number; type: "approval" | "evaluation"; title?: string } | null = null;
 
       // Step 3: Build body (keep existing logic)
-      const body: Record<string, unknown> = {};
-      const urlFieldPatchNames = new Set(urlFieldPatches.map((patch) => patch.fieldName));
-      // Dynamic matrices and table inputs have no bare SharePoint column — they
-      // are provisioned as `_Response` / `_Html` / `_Json` / `_RowIds` only (see
-      // `getSpColumnKind`). The renderer hands their answers back as a plain
-      // array of rows, which would otherwise fall through to `body[k]` below and
-      // be rejected as an unprovisioned field, failing the whole submission.
-      const tabularColumns = new Map(
-        getTabularFields(enrichedSurveyJsonRef.current || formData?.surveyJson).map(f => [f.name, f.columns]),
-      );
-      // Checkbox groups live in SharePoint MultiChoice columns, which take a
-      // real array. Everything else that arrives as an array is stored as JSON
-      // in a text column. See `getMultiChoiceFieldNames`.
-      const multiChoiceColumns = getMultiChoiceFieldNames(
-        enrichedSurveyJsonRef.current || formData?.surveyJson,
-      );
-      for (const [k, v] of Object.entries(raw)) {
-        if (urlFieldPatchNames.has(k)) continue;
-        if (tabularColumns.has(k)) {
-          const rows = (Array.isArray(v) ? v : []) as MatrixRow[];
-          if (rows.length === 0) continue;
-          body[`${k}_Response`] = rowsToHtml(tabularColumns.get(k) || [], rows);
-          body[`${k}_Json`] = JSON.stringify(rows);
-          continue;
-        }
-        if (v && typeof v === "object" && (v as Record<string, unknown>).html && (v as Record<string, unknown>).json) {
-          body[`${k}_Response`] = (v as Record<string, unknown>).html;
-          body[`${k}_Json`] = typeof (v as Record<string, unknown>).json === "string" ? (v as Record<string, unknown>).json : JSON.stringify((v as Record<string, unknown>).json);
-        } else if (Array.isArray(v)) {
-          /**
-           * A MultiChoice column takes the array itself. Stringifying it made
-           * SharePoint reject the whole item with "A 'StartArray' node was
-           * expected", so no form with a checkbox group could be submitted.
-           *
-           * `odata=nometadata` is in use throughout, so a plain JSON array is
-           * the right shape here -- the verbose
-           * `{ __metadata: { type: "Collection(Edm.String)" }, results: [...] }`
-           * form belongs to the metadata dialect this app does not speak.
-           *
-           * Every other array stays a JSON string, because its column is Text
-           * or Note and would reject an array just as firmly.
-           */
-          body[k] = multiChoiceColumns.has(k) ? v : JSON.stringify(v);
-        }
-        else if (v && typeof v === "object") {
-          if ("Url" in (v as Record<string, unknown>)) {
-            body[k] = v;
-          } else {
-            body[k] = JSON.stringify(v);
-          }
-        }
-        else if (typeof v === "number" || typeof v === "boolean") { body[k] = String(v); }
-        else { body[k] = v; }
-      }
+      const body: Record<string, unknown> = answerBody(raw, enrichedSurveyJsonRef.current || formData?.surveyJson, new Set(urlFieldPatches.map((patch) => patch.fieldName)));
       body.SubmittedAt = new Date().toISOString();
       body.FormVersion = cfg.CurrentVersion;
       body.PublishKey = cfg.CurrentPublishKey || publishKey || "production";
@@ -2525,7 +2723,27 @@ export default function DynamicFormPage() {
       )}
 
       <div className="dfp-content" style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 88px", animation: "fadeUp .3s ease" }}>
-        {submitStatus === "success" ? (
+        {submitStatus === "success" && editItemId ? (
+          <div role="status" style={{ textAlign: "center", padding: "60px 20px", animation: "fadeUp .3s ease" }}>
+            <UpdatedIllustration t={t} />
+            <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 26, color: t.textPrimary }}>Your submission was updated</div>
+          </div>
+        ) : editItemId && editLoad.status !== "ready" ? (
+          <div role={editLoad.status === "loading" ? "status" : "alert"} style={{ background: t.cardBg, border: `1px solid ${editLoad.status === "loading" ? t.border : t.amber}`, borderRadius: 12, padding: "24px", textAlign: "center", color: t.textSecond, fontSize: 13, lineHeight: 1.7, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            {editLoad.status === "loading" ? (
+              <><Spinner t={t} /><span>Opening your submission…</span></>
+            ) : editLoad.status === "refused" ? (
+              <>
+                <span>{EDIT_REFUSAL_MESSAGE[editLoad.reason]}</span>
+                {editLoad.reason === "sign-in" && (
+                  <button onClick={handleSignIn} style={{ fontSize: 13, fontWeight: 700, color: "#fff", background: t.purple, border: "none", borderRadius: 8, padding: "9px 18px", cursor: "pointer", fontFamily: "'DM Sans'" }}>Sign in</button>
+                )}
+              </>
+            ) : (
+              <span>This submission could not be opened. Make sure you are signed in with the account that sent it, or ask HR to send the link again.</span>
+            )}
+          </div>
+        ) : submitStatus === "success" ? (
           <SuccessScreen formTitle={formTitle} referenceNo={submittedReference} t={t} isTestRun={isTestRun} testEmailDisplay={testEmailDisplay} testRunReview={testRunReview} />
         ) : (
           <div>
@@ -2534,6 +2752,11 @@ export default function DynamicFormPage() {
                 <div style={{ width: 36, height: 36, borderRadius: "50%", background: `linear-gradient(135deg,${t.green},#34D399)`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700 }}>{(userEmail?.[0] || "?").toUpperCase()}</div>
                 <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 700, color: t.green }}>Submitting as yourself</div><div style={{ fontSize: 11, color: t.textSecond }}>{userEmail}</div></div>
                 <button onClick={handleSignOut} style={{ fontSize: 11, color: t.textSecond, background: "none", border: `1px solid ${t.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer", fontFamily: "'DM Sans'" }}>Sign out</button>
+              </div>
+            )}
+            {editItemId && editLoad.status === "ready" && (
+              <div role="status" style={{ background: t.amberPale, border: `1px solid ${t.amber}`, borderRadius: 12, padding: "12px 16px", marginBottom: 18, fontSize: 12, lineHeight: 1.7, color: t.textSecond }}>
+                <strong style={{ color: t.textPrimary }}>You are updating {editLoad.reference ? `submission ${editLoad.reference}` : "a submission you already sent"}.</strong> Everything you filled in is here. Change what you need and submit: it is saved onto the same submission, at the same step, and the approver is not emailed again.
               </div>
             )}
             {restoredAfterSignIn && (
