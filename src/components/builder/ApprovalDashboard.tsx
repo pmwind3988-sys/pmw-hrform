@@ -126,6 +126,8 @@ import SapPanel from "../sap/SapPanel";
 import SapFormTree, { type SapFormTreeEntry } from "../sap/SapFormTree";
 import SapViewSwitch from "../sap/SapViewSwitch";
 import EmailSchedulePanel from "./EmailSchedulePanel";
+import RoutingChecksPanel from "./RoutingChecksPanel";
+import { compileRoutingChecks, type RoutingCheckLine } from "../../utils/routingCheckOverview";
 import {
   compileEmailSchedule,
   sendSelectedScheduledEmails,
@@ -818,6 +820,7 @@ export default function ApprovalDashboard() {
   const [isSuperuser, setIsSuperuser] = useState(false);
   /** The compiled email schedule, shown in place of the three panes. */
   const [showEmailSchedule, setShowEmailSchedule] = useState(false);
+  const [showRoutingChecks, setShowRoutingChecks] = useState(false);
   const [adminChecked, setAdminChecked] = useState(false);
   const [itemCurrentTypes, setItemCurrentTypes] = useState<Record<string, "approval" | "evaluation">>({});
   const formLayerConfigsRef = useRef<Record<string, LayerConfigSource>>({});
@@ -3290,6 +3293,22 @@ export default function ApprovalDashboard() {
       })))
     : [];
 
+  /** Every automatic routing check logged on the loaded submissions, for the Routing checks view. */
+  const routingCheckLines = showRoutingChecks
+    ? compileRoutingChecks(pendingItems.map((item) => ({
+        formTitle: item.Title,
+        itemId: item.Id,
+        assignmentRaw: item.WorkflowAssignmentData,
+      })))
+    : [];
+
+  const openRoutingCheckItem = (line: RoutingCheckLine) => {
+    const item = pendingItems.find((current) => current.Title === line.formTitle && current.Id === line.itemId);
+    if (!item) return;
+    setShowRoutingChecks(false);
+    void loadItemDetails(item);
+  };
+
   const openScheduledEmailItem = (entry: EmailScheduleEntry) => {
     const item = pendingItems.find((current) => current.Title === entry.formTitle && current.Id === entry.itemId);
     if (!item) return;
@@ -3354,10 +3373,21 @@ export default function ApprovalDashboard() {
                   variant={showEmailSchedule ? "contained" : "outlined"}
                   size="small"
                   aria-pressed={showEmailSchedule}
-                  onClick={() => setShowEmailSchedule((current) => !current)}
+                  onClick={() => { setShowRoutingChecks(false); setShowEmailSchedule((current) => !current); }}
                   sx={{ textTransform: "none", fontWeight: 700, borderRadius: `${si.radius}px` }}
                 >
                   {showEmailSchedule ? "Back to submissions" : "Email schedule"}
+                </Button>
+              )}
+              {isSuperuser && (
+                <Button
+                  variant={showRoutingChecks ? "contained" : "outlined"}
+                  size="small"
+                  aria-pressed={showRoutingChecks}
+                  onClick={() => { setShowEmailSchedule(false); setShowRoutingChecks((current) => !current); }}
+                  sx={{ textTransform: "none", fontWeight: 700, borderRadius: `${si.radius}px` }}
+                >
+                  {showRoutingChecks ? "Back to submissions" : "Routing checks"}
                 </Button>
               )}
               <SapViewSwitch current="all" />
@@ -3552,8 +3582,12 @@ export default function ApprovalDashboard() {
           />
         )}
 
+        {showRoutingChecks && (
+          <RoutingChecksPanel lines={routingCheckLines} onOpen={openRoutingCheckItem} />
+        )}
+
         {/* Items + Detail Grid */}
-        <div style={{ display: showEmailSchedule ? "none" : "grid", gridTemplateColumns: isWide ? "260px minmax(0,1.6fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 16, flex: isWide ? 1 : undefined, minHeight: 0 }}>
+        <div style={{ display: showEmailSchedule || showRoutingChecks ? "none" : "grid", gridTemplateColumns: isWide ? "260px minmax(0,1.6fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 16, flex: isWide ? 1 : undefined, minHeight: 0 }}>
           {/* Form tree: pick a form to narrow the list, or All submissions for every form. */}
           <SapPanel label="Forms" sx={{ minHeight: 0, maxHeight: isWide ? undefined : 280 }}>
             <Box sx={{ overflow: "auto", flex: 1, minHeight: 0 }}>
