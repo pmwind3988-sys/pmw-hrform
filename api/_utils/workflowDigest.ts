@@ -13,7 +13,7 @@
  * redirected to its tester, so it is never bundled with real work.
  */
 import { parseValidEmailList } from "./layerRecipients.js";
-import { renderWorkflowEmail, WORKFLOW_EMAIL_STATUS } from "./workflowEmailTemplate.js";
+import { FOLLOW_UP_FLAG_NOTE, renderWorkflowEmail, WORKFLOW_EMAIL_STATUS } from "./workflowEmailTemplate.js";
 import type { WorkflowEmailMessage, WorkflowEmailScheduleEntry } from "./workflowEmail.js";
 
 /** The page the summary opens. Signed-in, and lists only the reader's own work. */
@@ -122,6 +122,7 @@ export function buildWorkflowDigestEmail(params: {
       details: listed,
       actionUrl,
       actionLabel: "Start reviewing",
+      flagNote: FOLLOW_UP_FLAG_NOTE,
       portalIdentity: true,
       note: "Sign in with your PMW work account. The page lists only the requests assigned to you.",
     }),

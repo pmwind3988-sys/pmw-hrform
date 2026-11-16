@@ -47,6 +47,13 @@ export interface WorkflowEmailTemplateParams {
    */
   info?: string;
   note?: string;
+  /**
+   * A small line under the button, for an email sent with an Outlook
+   * follow-up flag: once the flag's reminder pops up, it tells someone who
+   * has already acted that they can ignore it. The app cannot clear the flag
+   * itself; it lives in the reader's own mailbox.
+   */
+  flagNote?: string;
   /** Names the portal under the logo, for an email the reader may not be expecting. */
   portalIdentity?: boolean;
   /** A small "how to complete it" box under the button, for request emails. */
@@ -73,6 +80,10 @@ export const PASSWORD_HELP: { title: string; lines: string[] } = {
     "**Still unable to sign in?** Please contact **PMW IT** and we will gladly help.",
   ],
 };
+
+/** The line every flagged request email carries under its button. */
+export const FOLLOW_UP_FLAG_NOTE =
+  "**Already submitted?** You can ignore Outlook’s follow-up reminder for this email, or click the flag to mark it complete.";
 
 /** The HR forms mailbox, named in the guide when no sender is configured. */
 export const DEFAULT_HR_FORM_SENDER = "pmw.hrform@pmw-group.com";
@@ -407,6 +418,19 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
                             </table>
                             ${spacer(24)}`
     : "";
+  // Outlook classic draws borders and fills reliably only on a cell, so the
+  // border sits on the outer cell and the flag and text in a table inside it.
+  const flagNoteHtml = params.flagNote
+    ? `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                                <tr><td bgcolor="#F8FAFF" style="background-color:#F8FAFF;border:1px solid ${INFO_BORDER};border-radius:8px;padding:12px 16px 12px 14px">
+                                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"><tr>
+                                        <td width="24" style="width:24px;vertical-align:top;font-family:'Segoe UI Symbol','Segoe UI',Arial,sans-serif;font-size:15px;line-height:19px;color:${INFO_ICON}">&#9873;</td>
+                                        <td style="vertical-align:top;font-size:13px;line-height:19px;color:${INFO_INK}">${emphasised(plainStepText(params.flagNote), INFO_INK)}</td>
+                                    </tr></table>
+                                </td></tr>
+                            </table>
+                            ${spacer(16)}`
+    : "";
   const noteHtml = params.note
     ? `<p style="margin:20px 0 0;font-size:12px;line-height:18px;color:${MUTED};text-align:center">${escapeEmailHtml(plainStepText(params.note))}</p>`
     : "";
@@ -477,6 +501,8 @@ export function renderWorkflowEmail(params: WorkflowEmailTemplateParams): string
                             ${spacer(28)}
 
                             ${buttonsHtml}
+
+                            ${flagNoteHtml}
 
                             ${fallbackHtml}
 
@@ -573,6 +599,7 @@ export function renderActionRequestEmail(params: ActionRequestEmailParams): stri
     secondaryLabel: "View PDF record",
     portalIdentity: true,
     guide: buildRequestGuide({ formTitle: params.formTitle, layerType: params.layerType, buttonLabel: actionLabel, sender: params.sender }),
+    flagNote: FOLLOW_UP_FLAG_NOTE,
     note: "Only the person this step is assigned to should act on it.",
   });
 }

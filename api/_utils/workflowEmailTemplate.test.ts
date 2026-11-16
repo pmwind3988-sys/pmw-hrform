@@ -94,6 +94,23 @@ describe("renderActionRequestEmail", () => {
   it("names the evaluation button for an evaluation", () => {
     expect(renderActionRequestEmail({ ...REQUEST, layerType: "evaluation" })).toContain("Review &amp; submit evaluation");
   });
+
+  it("tells someone who already acted, under the button, that they can ignore the Outlook reminder", () => {
+    const body = renderActionRequestEmail(REQUEST);
+    const line = body.indexOf("Already submitted?");
+    expect(line).toBeGreaterThan(body.indexOf("Review &amp; approve form"));
+    expect(line).toBeLessThan(body.indexOf("Having trouble with the button?"));
+    expect(body).toContain("You can ignore Outlook’s follow-up reminder for this email, or click the flag to mark it complete.");
+    // Border and fill on a cell, which Outlook classic draws; the flag glyph has a symbol font to fall back on.
+    expect(body).toContain("<td bgcolor=\"#F8FAFF\" style=\"background-color:#F8FAFF;border:1px solid #BFDBFE");
+    expect(body).toContain("font-family:'Segoe UI Symbol'");
+  });
+
+  it("leaves emails that carry no flag exactly as they were", () => {
+    const body = renderWorkflowEmail({ preheader: "p", eyebrow: "e", heading: "h", intro: "i", details: [], actionUrl: "https://example.com" });
+    expect(body).not.toContain("Already submitted?");
+    expect(body).not.toContain("#F8FAFF");
+  });
 });
 
 describe("renderSubmissionOutcomeEmail", () => {

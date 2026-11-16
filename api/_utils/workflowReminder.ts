@@ -30,7 +30,7 @@ import { queueEntryForViewer, type QueueForm, type ReviewQueueEntry } from "./re
 import { isSuperuserOnlyForm } from "./superuserOnlyForms.js";
 import { isTestRow } from "./testRun.js";
 import type { WorkflowEmailLog, WorkflowEmailMessage, WorkflowEmailScheduleEntry } from "./workflowEmail.js";
-import { buildWorkflowEmailSubject, renderWorkflowEmail, requestSubmitterName, WORKFLOW_EMAIL_STATUS } from "./workflowEmailTemplate.js";
+import { buildWorkflowEmailSubject, FOLLOW_UP_FLAG_NOTE, renderWorkflowEmail, requestSubmitterName, WORKFLOW_EMAIL_STATUS } from "./workflowEmailTemplate.js";
 
 /** Days after the request email that each reminder is due. Its length is the cap. */
 export const REMINDER_DAYS = [3, 7] as const;
@@ -209,6 +209,7 @@ export function buildWorkflowReminderEmail(params: {
       ].filter((detail) => String(detail.value).trim()),
       actionUrl: params.reviewLink,
       actionLabel,
+      flagNote: FOLLOW_UP_FLAG_NOTE,
       portalIdentity: true,
       note: due.number >= REMINDER_DAYS.length
         ? "This is the last reminder we will send. Everything assigned to you is also on the Waiting for me page."
