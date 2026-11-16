@@ -2615,9 +2615,22 @@ interface WorkflowEmailAttachment {
 }
 
 /**
- * Sends email via SharePoint REST API (_api/SP.Utilities.Utility.SendEmail)
+ * A request to act that `/api/send-email` did not send because the routing
+ * check held it. `checkFailed` is true when the check could not run (it is
+ * retried on the next daily run), false when routing has no answer for the step.
  */
-export async function sendSpEmail(_token: string, { to, subject, body, attachments, workflow, testRun, followUp }: EmailParams): Promise<void> {
+export interface WorkflowEmailHold {
+  reason: string;
+  checkFailed: boolean;
+}
+
+/**
+ * Sends email via SharePoint REST API (_api/SP.Utilities.Utility.SendEmail)
+ *
+ * Resolves to the hold when the server's routing check kept a request to act
+ * from going out; to nothing when it was sent.
+ */
+export async function sendSpEmail(_token: string, { to, subject, body, attachments, workflow, testRun, followUp }: EmailParams): Promise<WorkflowEmailHold | undefined> {
   // ⚠ SharePoint's SendEmail API has been retired (Sep 2024).
   // All emails are now sent via the /api/send-email API route using Microsoft Graph's sendMail.
   const apiUrl = `${window.location.origin}/api/send-email`;
@@ -2646,6 +2659,13 @@ export async function sendSpEmail(_token: string, { to, subject, body, attachmen
     const err = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(`sendSpEmail failed ${response.status}: ${err.error || response.statusText}`);
   }
+  const answer = await response.json().catch(() => ({})) as { held?: unknown; reason?: unknown };
+  if (typeof answer.held !== "string" || !answer.held) return undefined;
+  return {
+    reason: typeof answer.reason === "string" ? answer.reason : "",
+    // "check-failed" (the row could not be read) or "held-check-failed".
+    checkFailed: answer.held.endsWith("check-failed"),
+  };
 }
 
 // ── Approval Notification Triggers ─────────────────────────────────────────
@@ -2862,7 +2882,7 @@ async function resolveWorkflowReviewLink(
 export async function triggerApprovalNotification(
   token: string,
   params: ApprovalNotificationParams
-): Promise<void> {
+): Promise<{ held?: WorkflowEmailHold }> {
   const { formTitle, submittedBy, responseItemId, layer, totalLayers, action = 'submit', nextApproverEmail, nextRecipients, nextLayerType = 'approval', nextLayerNumber, reviewLink, pdfUrl, responseListTitle = formTitle, throwOnEmailError = false, nextEmailSchedule, scheduleAnchor, attachments, testRun, rejectionReason, decidedBy } = params;
   // One address stays a plain string so existing single-assignee mail is byte
   // for byte unchanged; only fan-out layers become an array.
@@ -2992,13 +3012,13 @@ export async function triggerApprovalNotification(
               layerType: nextLayerType,
             }),
           });
-          return;
+          return {};
         }
         if (nextLayerType === "evaluation" && nextEmailSchedule && nextEmailSchedule.mode !== "immediate") {
-          return;
+          return {};
         }
         const submitStandInNote = await standInNoteFor(targetEmail, submitRecipients);
-        await sendSpEmail(token, {
+        const held = await sendSpEmail(token, {
           testRun,
           to: submitRecipients,
           subject: subjectFor('Action Required'),
@@ -3024,6 +3044,7 @@ export async function triggerApprovalNotification(
             sender: HR_FORM_SENDER,
           }),
         });
+        if (held) return { held };
       }
     } else if (action === 'approve') {
       if (layer < totalLayers && nextApproverEmail) {
@@ -3053,13 +3074,13 @@ export async function triggerApprovalNotification(
               layerType: nextLayerType,
             }),
           });
-          return;
+          return {};
         }
         if (nextLayerType === "evaluation" && nextEmailSchedule && nextEmailSchedule.mode !== "immediate") {
-          return;
+          return {};
         }
         const nextStandInNote = await standInNoteFor(nextApproverEmail, nextLayerRecipients);
-        await sendSpEmail(token, {
+        const held = await sendSpEmail(token, {
           testRun,
           to: nextLayerRecipients,
           subject: subjectFor('Action Required'),
@@ -3086,6 +3107,7 @@ export async function triggerApprovalNotification(
             pdfUrl: absolutePdfUrl(pdfUrl),
           }),
         });
+        if (held) return { held };
       } else if (layer === totalLayers && isEmailAddress(submittedBy)) {
         // Final approval - notify submitter
         await sendSpEmail(token, {
@@ -3140,6 +3162,7 @@ export async function triggerApprovalNotification(
     if (throwOnEmailError) throw error;
     // Don't throw - email failures shouldn't block the workflow
   }
+  return {};
 }
 
 /**

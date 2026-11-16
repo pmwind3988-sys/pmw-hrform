@@ -26,6 +26,9 @@ import { parseValidEmailList } from "./layerRecipients.js";
 import { logWarn } from "./logger.js";
 import { REFERENCE_NO_FIELD } from "./referenceNumber.js";
 import { isTestRow, readTestRunRedirect, redirectTestMessage } from "./testRun.js";
+import { isManualPaperStatus, isNeedsRoutingStatus } from "./layerParkStatus.js";
+import { decideBeforeSend } from "./preSendGate.js";
+import { createPreSendCheckCache } from "./preSendRoutingCheck.js";
 import {
   LINK_REISSUE_LOG_FIELD,
   isReissueAllowed,
@@ -34,6 +37,8 @@ import {
   readLinkToken,
   recordReissue,
 } from "./linkToken.js";
+
+const LOG_SCOPE = "api:evaluate:reissue";
 
 export interface LinkReissuePlan {
   recipients: string[];
@@ -108,6 +113,30 @@ export async function reissueReviewLink(params: ReissueReviewLinkParams): Promis
   if (!plan) return;
 
   try {
+    // A checked form's step is compared with routing first (preSendGate.ts).
+    // A hold sends nothing and writes nothing, and the clicker is answered
+    // exactly as always; a correction mails the routed people instead.
+    const decision = await decideBeforeSend(
+      params.graphToken,
+      createPreSendCheckCache(params.graphToken),
+      {
+        formTitle: params.formTitle,
+        itemId: params.responseItemId,
+        layer: params.layerNumber,
+        trigger: "link-reissue",
+        listTitle: params.responseListName,
+      },
+      params.fields,
+      LOG_SCOPE,
+    );
+    if (decision.action === "hold") return;
+    const notCheckableStatus = String(decision.action === "as-before"
+      ? decision.notCheckable?.fields[`L${params.layerNumber}_Status`] ?? ""
+      : "");
+    if (isNeedsRoutingStatus(notCheckableStatus) || isManualPaperStatus(notCheckableStatus)) return;
+    const recipients = decision.action === "send" ? decision.recipients : plan.recipients;
+    const fields = decision.action === "send" ? decision.fields : params.fields;
+
     // A list provisioned before bindings existed has nowhere to put one, and
     // this is the moment an old link is being repaired — so the columns are
     // added here rather than leaving the replacement to fail quietly.
@@ -126,11 +155,11 @@ export async function reissueReviewLink(params: ReissueReviewLinkParams): Promis
     const layerType = params.layer?.type === "evaluation" ? "evaluation" : "approval";
     const message = buildWorkflowActionEmail({
       formTitle: params.formTitle,
-      submittedBy: String(params.fields.SubmittedBy || "Public respondent"),
+      submittedBy: String(fields.SubmittedBy || "Public respondent"),
       responseItemId: params.responseItemId,
       layer: params.layerNumber,
       totalLayers: params.totalLayers,
-      recipient: plan.recipients.length === 1 ? plan.recipients[0] : plan.recipients,
+      recipient: recipients.length === 1 ? recipients[0] : recipients,
       layerType,
       reviewLink: buildWorkflowReviewLink({
         baseUrl: params.baseUrl,
@@ -142,18 +171,18 @@ export async function reissueReviewLink(params: ReissueReviewLinkParams): Promis
         layerNumber: params.layerNumber,
         linkToken: plan.linkToken,
       }),
-      referenceNo: String(params.fields[REFERENCE_NO_FIELD] || ""),
-      applicantName: resolveApplicantName(params.fields),
-      trainingTitle: resolveTrainingTitle(params.fields),
+      referenceNo: String(fields[REFERENCE_NO_FIELD] || ""),
+      applicantName: resolveApplicantName(fields),
+      trainingTitle: resolveTrainingTitle(fields),
       submitterName: await lookupSubmitterName(
         createApprovalDirectoryReader(params.graphToken),
-        String(params.fields.SubmittedBy || ""),
+        String(fields.SubmittedBy || ""),
       ),
     });
     if (isTestRow(params.fields)) {
       const testRun = readTestRunRedirect(params.fields);
       if (!testRun) {
-        logWarn("api:evaluate:reissue", "Test run has no usable redirect address; refusing to reissue rather than mailing a real approver", {
+        logWarn(LOG_SCOPE, "Test run has no usable redirect address; refusing to reissue rather than mailing a real approver", {
           layerNumber: params.layerNumber,
           responseItemId: params.responseItemId,
         });
@@ -164,7 +193,7 @@ export async function reissueReviewLink(params: ReissueReviewLinkParams): Promis
       await sendGraphEmail(params.graphToken, message);
     }
   } catch (err) {
-    logWarn("api:evaluate:reissue", "Could not replace an unbound review link", {
+    logWarn(LOG_SCOPE, "Could not replace an unbound review link", {
       layerNumber: params.layerNumber,
       responseItemId: params.responseItemId,
       errorMessage: err instanceof Error ? err.message : String(err),

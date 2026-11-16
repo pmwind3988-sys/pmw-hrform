@@ -2204,7 +2204,7 @@ export default function ApprovalDashboard() {
         }
       }
 
-      await triggerApprovalNotification(token, {
+      const notification = await triggerApprovalNotification(token, {
         formTitle: item.Title,
         submittedBy: item.SubmittedBy,
         responseItemId: item.Id,
@@ -2251,6 +2251,13 @@ export default function ApprovalDashboard() {
           ...selectedLayerAccess,
           assignedEmail: refreshedRecipient.toLowerCase(),
         });
+      }
+      if (notification.held) {
+        // The routing check kept the request from going out (api/send-email.ts).
+        setError(notification.held.checkFailed
+          ? "Not sent: the routing check could not run. It will be retried on the next daily run."
+          : `Not sent: ${notification.held.reason.replace(/[.\s]+$/, "") || "routing has no answer for this step"}. The step is on hold until routing is set.`);
+        return false;
       }
       setEmailNotice(
         isManualPaperEmail

@@ -6,7 +6,9 @@ import {
   sendGraphEmail,
   type WorkflowEmailAttachment,
   type WorkflowEmailContext,
+  type WorkflowEmailMessage,
 } from "./_utils/workflowEmail.js";
+import { gateBrowserRequest, routingCheckedFormForList } from "./_utils/sendNowGate.js";
 import { applySendEmailTestRun } from "./_utils/sendEmailTestRun.js";
 import { isTestRow, readTestRunRedirect } from "./_utils/testRun.js";
 import { checkRateLimit } from "./_utils/rateLimit.js";
@@ -185,10 +187,26 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       // would have sent before this change", logged so it stays visible. The
       // one case that still refuses to send is the one already handled below:
       // the row loaded fine, it is a test row, and it has no usable redirect.
+      //
+      // A form switched on for the routing check is the exception, for a
+      // request to act only: its person cannot be confirmed without the row,
+      // and the check never sends unconfirmed. The browser has already left
+      // the step's schedule entry "scheduled", so the daily run checks again
+      // and sends it then.
+      const checkedFormTitle = followUp === true ? routingCheckedFormForList(listTitle) : "";
       let responseItem: Awaited<ReturnType<typeof queryListItemById>> = null;
       try {
         responseItem = await queryListItemById(token, listTitle, String(responseItemId));
       } catch (lookupError) {
+        if (checkedFormTitle) {
+          logWarn("api:send-email", "Could not read the workflow row for the routing check; holding the request", {
+            listTitle,
+            responseItemId,
+            layer,
+            errorMessage: lookupError instanceof Error ? lookupError.message : String(lookupError),
+          });
+          return res.status(200).json({ ok: true, held: "check-failed" });
+        }
         logWarn("api:send-email", "Could not resolve the workflow row to check for a test-run redirect; sending as an ordinary message", {
           listTitle,
           responseItemId,
@@ -218,7 +236,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       // stamps a second "would have gone to…" banner on top of the first,
       // naming the test address instead of the real approver.
       const context: WorkflowEmailContext = { listTitle, responseItemId, layer, testRun };
-      await deliverWorkflowEmail(token, rawMessage, context);
+      let message: WorkflowEmailMessage = rawMessage;
+      if (checkedFormTitle) {
+        if (!responseItem) {
+          logWarn("api:send-email", "The workflow row is gone; holding the request", { listTitle, responseItemId, layer });
+          return res.status(200).json({ ok: true, held: "check-failed" });
+        }
+        const gated = await gateBrowserRequest(token, checkedFormTitle, listTitle, String(responseItem.id), layer, responseItem.fields);
+        if ("held" in gated) return res.status(200).json({ ok: true, ...gated });
+        message = gated.message ?? rawMessage;
+      }
+      await deliverWorkflowEmail(token, message, context);
     } else {
       // No workflow row to derive a redirect from (a plain confirmation email,
       // for instance) — fall back to the ticket the caller forwarded, if any.

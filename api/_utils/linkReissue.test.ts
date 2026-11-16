@@ -10,6 +10,10 @@ vi.mock("./provisioning.js", () => ({
   ensureWorkflowColumns: vi.fn(async () => {}),
 }));
 
+const gate = vi.hoisted(() => ({ decideBeforeSend: vi.fn() }));
+vi.mock("./preSendGate.js", () => ({ decideBeforeSend: gate.decideBeforeSend }));
+vi.mock("./preSendRoutingCheck.js", () => ({ createPreSendCheckCache: () => ({}) }));
+
 /**
  * A link issued before review links were bound to their submission carries no
  * `k` and cannot be given one. Clicking one mails a fresh link to the address
@@ -102,6 +106,8 @@ describe("reissueReviewLink and test runs", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+    gate.decideBeforeSend.mockReset();
+    gate.decideBeforeSend.mockResolvedValue({ action: "as-before" });
   });
 
   it("sends a reissued link on a test-flagged row to the test address instead", async () => {
@@ -149,5 +155,76 @@ describe("reissueReviewLink and test runs", () => {
     }));
 
     expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it("asks the routing check first, as a reissued link", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 202, json: async () => ({}) })));
+    vi.stubEnv("HR_FORM_EMAIL_FROM_ADDRESS", "noreply@example.com");
+
+    await reissueReviewLink(baseParams({ ...activated }));
+
+    expect(gate.decideBeforeSend).toHaveBeenCalledWith(
+      "tok",
+      expect.anything(),
+      { formTitle: "Incident Report", itemId: "7", layer: 2, trigger: "link-reissue", listTitle: "Incident Report" },
+      expect.objectContaining(activated),
+      "api:evaluate:reissue",
+    );
+  });
+
+  it("sends nothing and writes nothing when the check holds the step, and answers as before", async () => {
+    const sendMail = vi.fn(async () => ({ ok: true, status: 202, json: async () => ({}) }));
+    vi.stubGlobal("fetch", sendMail);
+    vi.stubEnv("HR_FORM_EMAIL_FROM_ADDRESS", "noreply@example.com");
+    const { updateListItemFields } = await import("./graphClient.js");
+    vi.mocked(updateListItemFields).mockClear();
+    gate.decideBeforeSend.mockResolvedValue({ action: "hold", reason: "No HOD on the Routing page", checkFailed: false });
+
+    await expect(reissueReviewLink(baseParams({ ...activated }))).resolves.toBeUndefined();
+
+    expect(sendMail).not.toHaveBeenCalled();
+    expect(updateListItemFields).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing when the check itself throws", async () => {
+    const sendMail = vi.fn(async () => ({ ok: true, status: 202, json: async () => ({}) }));
+    vi.stubGlobal("fetch", sendMail);
+    vi.stubEnv("HR_FORM_EMAIL_FROM_ADDRESS", "noreply@example.com");
+    gate.decideBeforeSend.mockRejectedValue(new Error("boom"));
+
+    await expect(reissueReviewLink(baseParams({ ...activated }))).resolves.toBeUndefined();
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing to a step the check found parked", async () => {
+    const sendMail = vi.fn(async () => ({ ok: true, status: 202, json: async () => ({}) }));
+    vi.stubGlobal("fetch", sendMail);
+    vi.stubEnv("HR_FORM_EMAIL_FROM_ADDRESS", "noreply@example.com");
+    gate.decideBeforeSend.mockResolvedValue({
+      action: "as-before",
+      notCheckable: { fields: { ...activated, L2_Status: "Needs Routing" } },
+    });
+
+    await reissueReviewLink(baseParams({ ...activated }));
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it("mails the people routing corrected the step to", async () => {
+    const sendMail = vi.fn(async (_url: string, _init: { body: string }) => ({ ok: true, status: 202, json: async () => ({}) }));
+    vi.stubGlobal("fetch", sendMail);
+    vi.stubEnv("HR_FORM_EMAIL_FROM_ADDRESS", "noreply@example.com");
+    gate.decideBeforeSend.mockResolvedValue({
+      action: "send",
+      recipients: ["routed@contractor.example"],
+      primary: "routed@contractor.example",
+      fields: { ...activated, L2_Email: "routed@contractor.example", L2_NotifyEmails: "routed@contractor.example" },
+      corrected: true,
+    });
+
+    await reissueReviewLink(baseParams({ ...activated }));
+
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(String(sendMail.mock.calls[0][1].body));
+    expect(body.message.toRecipients).toEqual([{ emailAddress: { address: "routed@contractor.example" } }]);
   });
 });
