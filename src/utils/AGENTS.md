@@ -5,6 +5,11 @@
 ## WHERE TO LOOK
 | Task | File | Notes |
 |------|------|-------|
+| Routing inspection | `routingInspect.ts` | Who routing picks for one step vs who is saved; used by the manual "Check routing" and the automatic pre-send check. Mirror: `api/_utils/routingInspect.ts`. |
+| Checked forms switch | `routingCheckedForms.ts` | `ROUTING_CHECKED_FORM_TITLES` (Training Evaluation Form); mirrored at `api/_utils/`. |
+| Routing check log | `workflowAssignmentData.ts` | `WorkflowAssignmentData.checks` (de-duplicated, newest 60, `recordRoutingCheck`) beside the per-layer assignments; mirrored at `api/_utils/`. |
+| Routing check wording | `routingCheckLabels.ts`, `workflowEmailHoldMessage.ts` | Plain-language outcome/trigger labels and the admin's "Not sent: ..." hold message. |
+| Park statuses / chain context | `layerParkStatus.ts`, `resolutionContext.ts` | `Needs Routing` and paper statuses; who a chain layer counts from. Both mirrored at `api/_utils/`. |
 | SP REST client (dashboard) | `sharepointClient.ts` | Factory `createSpClient(instance, accounts)` — CRUD, digest cache, `isGroupMember`, list discovery, `resolveUserEmails` |
 | SP REST client (builder) | `formBuilderSP.ts` | **Standalone** — raw `token: string` param, NOT `createSpClient`; ~1470 lines, 43 exports |
 | Config loader | `spConfig.ts` | `SP_STATIC` group names, `loadConfig` from Master Form, `filterVisibleLists`, `generateMeta`, `getMissingConfigs`, `legacyToLayerConfig()` migration helper |

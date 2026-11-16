@@ -76,6 +76,7 @@ AdminFormBuilder.tsx (page — route: /admin/builder, requires HR Forms Owner + 
 - **Logo Setter**: Banner logo URL configurable in the form meta sidebar; defaults to `/logo-128.png`.
 - **Form Title Toggle**: "Show form title" toggle in Form Settings controls SurveyJS title visibility (sets `titleLocation: "hidden"`). Title is centered via CSS when visible.
 - **Public Layer Tokens**: Publish flow generates UUID tokens for public layers via `crypto.randomUUID()`. Each token grants access to exactly one layer.
+- **Routing check panel**: `RoutingCheckPanel.tsx` also lists "Automatic checks", the log of pre-send checks from `WorkflowAssignmentData.checks` (newest first, wording in `src/utils/routingCheckLabels.ts`). Manual check/Fix and the automatic check share `routingInspect.ts`.
 
 ## Anti-Patterns
 - `FormBuilder.tsx` has `eslint-disable` and `any[]` usage — fix when touching

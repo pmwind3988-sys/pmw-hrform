@@ -7,6 +7,11 @@
 ## WHERE TO LOOK
 | Task | File | Notes |
 |------|------|-------|
+| Routing check before a request email | `_utils/preSendRoutingCheck.ts` | `checkBeforeSend`: compares a step's saved people with routing before a "please act" email, corrects or holds it, logs to `WorkflowAssignmentData.checks`. Only forms in `routingCheckedForms.ts`; test runs skipped. Failure = `held-check-failed`, never a send. |
+| Routing check → send decision | `_utils/preSendGate.ts` | `decideBeforeSend` / `gateFirstRequestEmail`: maps the check to `as-before` / `send` / `hold` for submit-form, evaluate, cron and link reissue. |
+| Routing check for browser sends | `_utils/sendNowGate.ts` | `gateBrowserRequest` for `send-email.ts`: confirm, hold, or rebuild the request for corrected people. Only a request carrying workflow context + follow-up flag. |
+| Submission's workflow config | `_utils/submissionLayerConfig.ts` | Layer config from the submission's own form version/profile; shared by `evaluate.ts` and the routing check. |
+| Routing rules, mirrored | `_utils/routingInspect.ts`, `routingCheck.ts`, `routingCheckedForms.ts`, `workflowAssignmentData.ts`, `evaluationSubmitterRouting.ts`, `layerParkStatus.ts`, `resolutionContext.ts` | Each mirrors the `src/utils/` file of the same name (identity tests); edit both. |
 | Public form config | `form-config.ts` | `GET /api/form-config?slug=X[&version=Y]`. Reads Master Form + Web Form Versions via Graph API. |
 | Public form submit | `submit-form.ts` | `POST /api/submit-form`. Verifies form is public, creates list item via Graph API. Accepts optional `matrixData` param for dynamicmatrix child list items and resolves department approver layers from "Department Approver Directory". |
 | Submission reference no. | `next-reference.ts` | `POST /api/next-reference` `{listTitle}`. Allocates the next `[PREFIX-]DDMMYY-NNNN` for a form. The **only** allocator — the signed-in browser and `submit-form.ts` both call through it, so concurrent submissions cannot claim the same number. Prefix/padding come from the form's `ReferenceConfig`, never the request. |
