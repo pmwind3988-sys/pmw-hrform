@@ -148,6 +148,7 @@ export async function gateBrowserRequest(
       }
       return {};
     }
+    // match / left-alone: the browser's message goes unchanged to the browser's recipients — it was written for exactly those people, and the check has just confirmed they are the routed set.
     if (!decision.corrected) return {};
     const message = await rebuildCorrectedActionEmail(token, {
       formTitle,

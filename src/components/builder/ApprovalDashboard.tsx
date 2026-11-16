@@ -12,6 +12,7 @@ import "../../native/native-form.css";
 
 import { buildSubmissionGroups, instanceState, type FormInstance } from "../../utils/formInstances";
 import { listFormInstances } from "../../utils/formInstancesSP";
+import { workflowEmailHoldMessage } from "../../utils/workflowEmailHoldMessage";
 import { spGet, spPatch, triggerApprovalNotification, getAllFormConfigs, getFormConfigByTitle, submitEvaluationData, updateLayerStatus, ensureWorkflowColumns, getSharePointChoices, getFilteredListChoices } from "../../utils/formBuilderSP";
 import PublicSubmissionLinkRow from "./PublicSubmissionLinkRow";
 import { SignatureCapture } from "../../utils/signatureCapture";
@@ -2254,9 +2255,7 @@ export default function ApprovalDashboard() {
       }
       if (notification.held) {
         // The routing check kept the request from going out (api/send-email.ts).
-        setError(notification.held.checkFailed
-          ? "Not sent: the routing check could not run. It will be retried on the next daily run."
-          : `Not sent: ${notification.held.reason.replace(/[.\s]+$/, "") || "routing has no answer for this step"}. The step is on hold until routing is set.`);
+        setError(workflowEmailHoldMessage(notification.held));
         return false;
       }
       setEmailNotice(
@@ -2624,7 +2623,7 @@ export default function ApprovalDashboard() {
           .sort((a, b) => a - b)
           .pop();
         const emailSchedule = targetLayer.type === "evaluation" ? targetLayer.emailSchedule : undefined;
-        await triggerApprovalNotification(token, {
+        const notification = await triggerApprovalNotification(token, {
           formTitle: selectedItem.Title,
           submittedBy: selectedItem.SubmittedBy,
           responseItemId: selectedItem.Id,
@@ -2641,6 +2640,12 @@ export default function ApprovalDashboard() {
           throwOnEmailError: true,
         });
         const scheduled = emailSchedule && emailSchedule.mode !== "immediate";
+        if (notification.held) {
+          // The reassignment is saved; only its email was held by the routing check.
+          setEmailNotice(`Layer ${input.layer} routed to ${email}.`);
+          setError(workflowEmailHoldMessage(notification.held));
+          return true;
+        }
         setEmailNotice(
           scheduled
             ? `Layer ${input.layer} routed to ${email}. The evaluation email is scheduled, not sent now — same wait as any other submission of this form.`
