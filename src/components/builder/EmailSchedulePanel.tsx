@@ -10,8 +10,8 @@ import {
   isUpcoming,
   nextDigestRunAt,
   type EmailScheduleEntry,
-  type EmailScheduleState,
 } from "../../utils/emailScheduleOverview";
+import { emailWhenText, formatWhen, STATE_TONE } from "./emailScheduleDisplay";
 
 type ViewFilter = "upcoming" | "attention" | "next" | "later" | "sent" | "all";
 
@@ -32,24 +32,6 @@ const VIEW_LABELS: Record<ViewFilter, string> = {
   sent: "Already sent",
   all: "Everything",
 };
-
-const STATE_TONE: Record<EmailScheduleState, { bg: string; fg: string }> = {
-  held: { bg: editorial.errorSoft, fg: editorial.error },
-  failed: { bg: editorial.errorSoft, fg: editorial.error },
-  stopped: { bg: editorial.errorSoft, fg: editorial.error },
-  "next-summary": { bg: editorial.sky, fg: editorial.navyDeep },
-  "next-alone": { bg: editorial.accentSoft, fg: editorial.accentText },
-  later: { bg: editorial.blueWash, fg: editorial.muted },
-  "sent-summary": { bg: editorial.successSoft, fg: editorial.success },
-  "sent-alone": { bg: editorial.successSoft, fg: editorial.success },
-};
-
-function formatWhen(iso: string | undefined): string {
-  if (!iso) return "—";
-  const time = Date.parse(iso);
-  if (!Number.isFinite(time)) return "—";
-  return new Date(time).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
-}
 
 /**
  * All Submissions → Email schedule.
@@ -151,12 +133,7 @@ export default function EmailSchedulePanel({
       key: "when",
       header: "When",
       nowrap: true,
-      render: (entry) => entry.state.startsWith("sent")
-        ? `Sent ${formatWhen(entry.sentAt)}`
-        : entry.state === "later" ? formatWhen(entry.dueAt)
-          : entry.state === "stopped" ? `${entry.attempts} attempts`
-            : entry.state === "held" ? "Not sent yet"
-            : `Next run · ${formatWhen(nextDigestRunAt().toISOString())}`,
+      render: emailWhenText,
     },
     {
       key: "open",

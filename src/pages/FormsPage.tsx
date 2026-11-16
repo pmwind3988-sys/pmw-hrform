@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type MouseEvent } from "react";
-import { Box, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { Box, Chip, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { Link } from "react-router-dom";
 import {
   ContentCopyOutlined,
@@ -40,6 +40,9 @@ import { formatDashboardDateTime, getSubmitterDisplayName } from "../utils/submi
 import { buildSubmissionCsv } from "../utils/submissionCsv";
 import { downloadCsv } from "../utils/csv";
 import type { Submission } from "../types";
+import { emailScheduleLabel, type EmailScheduleEntry } from "../utils/emailScheduleOverview";
+import { formEmailCounts, formEmailEntries } from "../utils/formEmailList";
+import { emailWhenText, STATE_TONE } from "../components/builder/emailScheduleDisplay";
 
 interface FormRow {
   /** The SharePoint response list title, and the form's display name. */
@@ -51,7 +54,8 @@ interface FormRow {
   summary: FormSubmissionSummary;
 }
 
-type StateTab = "all" | SubmissionState;
+/** "emails": the form's workflow emails, sent and still to go (Form Builder admins only). */
+type StateTab = "all" | SubmissionState | "emails";
 
 /** Open requests this old are drawn in red: they have waited long enough for someone to chase. */
 const OVERDUE_DAYS = 7;
@@ -98,6 +102,7 @@ export default function FormsPage() {
   const [selectedTitle, setSelectedTitle] = useState<string | null>(null);
   const [stateTab, setStateTab] = useState<StateTab>("all");
   const [selectedSubmissionKey, setSelectedSubmissionKey] = useState<string | null>(null);
+  const [selectedEmailKey, setSelectedEmailKey] = useState<string | null>(null);
   const [findText, setFindText] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -175,12 +180,24 @@ export default function FormsPage() {
   const selectedSubmission =
     shownSubmissions.find((item) => submissionKey(item) === selectedSubmissionKey) ?? null;
 
+  // The same emails All Submissions -> Email schedule lists, for this form only.
+  // Admin-only: they name the people each step was sent to.
+  const emailEntries = canUseFormBuilder ? formEmailEntries(formSubmissions) : [];
+  const emailCounts = formEmailCounts(emailEntries);
+  const showingEmails = stateTab === "emails" && canUseFormBuilder;
+  const selectedEmail = emailEntries.find((entry) => entry.key === selectedEmailKey) ?? null;
+  const openEmailSubmission = (entry: EmailScheduleEntry) => {
+    const item = formSubmissions.find((current) => Number(current.id) === entry.itemId);
+    if (item) setDetailItem(item);
+  };
+
   const canExport = isAdmin || canUseFormBuilder;
 
   const pickForm = (form: FormRow) => {
     setSelectedTitle(form.title);
     setStateTab("all");
     setSelectedSubmissionKey(null);
+    setSelectedEmailKey(null);
   };
 
   /**
@@ -355,6 +372,43 @@ export default function FormsPage() {
     },
   ];
 
+  const emailColumns: SapColumn<EmailScheduleEntry>[] = [
+    {
+      key: "state",
+      header: "Status",
+      nowrap: true,
+      render: (entry) => (
+        <Chip
+          size="small"
+          label={emailScheduleLabel(entry)}
+          sx={{ height: 22, ...siType.subtext, fontWeight: 600, backgroundColor: STATE_TONE[entry.state].bg, color: STATE_TONE[entry.state].fg }}
+        />
+      ),
+    },
+    {
+      key: "submission",
+      header: "Submission",
+      nowrap: true,
+      render: (entry) => {
+        const item = formSubmissions.find((current) => Number(current.id) === entry.itemId);
+        return (
+          <Box component="span">
+            <Box component="span" sx={{ fontWeight: 600, color: editorial.navy }}>{item?.referenceNo || `#${entry.itemId}`}</Box>
+            {item && <Box component="span" sx={{ color: editorial.muted }}> · {getSubmitterDisplayName(item)}</Box>}
+          </Box>
+        );
+      },
+    },
+    {
+      key: "step",
+      header: "Step",
+      nowrap: true,
+      render: (entry) => `Step ${entry.layer} · ${entry.layerType === "evaluation" ? "Evaluation" : "Approval"}`,
+    },
+    { key: "to", header: "Sent to", maxWidth: narrow ? 170 : 260, render: (entry) => entry.recipient || "—" },
+    { key: "when", header: "When", nowrap: true, render: emailWhenText },
+  ];
+
   const counts = selectedForm?.summary ?? emptyFormSummary();
 
   return (
@@ -429,18 +483,28 @@ export default function FormsPage() {
                 onChange={(value) => {
                   setStateTab(value);
                   setSelectedSubmissionKey(null);
+                  setSelectedEmailKey(null);
                 }}
                 tabs={[
                   { value: "all", label: "All", count: counts.total },
                   ...SUBMISSION_STATES.map((state) => ({ value: state, label: SUBMISSION_STATE_LABELS[state], count: counts[state] })),
+                  ...(canUseFormBuilder
+                    ? [{ value: "emails" as const, label: "Emails sent & pending", count: emailEntries.length }]
+                    : []),
                 ]}
               />
               <Box sx={{ ml: "auto" }}>
                 <SapToolbar label="Submission actions">
-                  <SapToolButton icon={<VisibilityOutlined />} disabled={!selectedSubmission} onClick={() => selectedSubmission && setDetailItem(selectedSubmission)}>
-                    Open
-                  </SapToolButton>
-                  {canExport && (
+                  {showingEmails ? (
+                    <SapToolButton icon={<VisibilityOutlined />} disabled={!selectedEmail} onClick={() => selectedEmail && openEmailSubmission(selectedEmail)}>
+                      Open
+                    </SapToolButton>
+                  ) : (
+                    <SapToolButton icon={<VisibilityOutlined />} disabled={!selectedSubmission} onClick={() => selectedSubmission && setDetailItem(selectedSubmission)}>
+                      Open
+                    </SapToolButton>
+                  )}
+                  {canExport && !showingEmails && (
                     <>
                       <SapToolSeparator />
                       <SapToolButton icon={<FileDownloadOutlined />} disabled={shownSubmissions.length === 0} onClick={exportShown}>
@@ -455,7 +519,9 @@ export default function FormsPage() {
           status={
             <>
               <span>
-                Double-click a row, or select it and press Enter, to open it
+                {showingEmails
+                  ? `${emailCounts.sent} sent · ${emailCounts.pending} pending. Double-click a row to open its submission. To send now, resend or change a date, use All submissions → Email schedule.`
+                  : "Double-click a row, or select it and press Enter, to open it"}
               </span>
               {canUseFormBuilder && (
                 <Box
@@ -469,6 +535,20 @@ export default function FormsPage() {
             </>
           }
         >
+          {showingEmails ? (
+            <SapGrid
+              label={`Emails for ${selectedForm.title}`}
+              columns={emailColumns}
+              rows={emailEntries}
+              getKey={(entry) => entry.key}
+              selectedKey={selectedEmail?.key ?? null}
+              onSelect={(entry) => setSelectedEmailKey(entry.key)}
+              onOpen={openEmailSubmission}
+              pageSize={25}
+              emptyText="No workflow emails for this form yet."
+              minWidth={760}
+            />
+          ) : (
           <SapGrid
             label={`Submissions for ${selectedForm.title}`}
             columns={submissionColumns}
@@ -487,6 +567,7 @@ export default function FormsPage() {
             }
             minWidth={760}
           />
+          )}
         </SapPanel>
       )}
 

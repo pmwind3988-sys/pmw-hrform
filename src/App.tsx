@@ -28,7 +28,7 @@ import type { AuthRecoveryEventDetail } from "./utils/authRecovery";
 import { SP_STATIC, loadConfig, filterVisibleLists, getMissingConfigs, generateMeta, surveySnapshotKey } from "./utils/spConfig";
 import { withoutSuperuserOnlyForms } from "./utils/superuserOnlyForms";
 import { getStoredAuthDecision, setStoredAuthDecision, clearStoredAuthDecision } from "./utils/authDecision";
-import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, LayerConfigItem, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult, SurveyJson } from "./types";
+import type { PageState, Submission, ApprovalLayer, DiscoveredList, ListMetaEntry, LoadedConfig, LayerConfig, LayerConfigItem, ApprovalLayerConfig, ApprovalLayerResult, EvaluationLayerResult, EvaluationDataEntry, HardDeleteSubmissionResult, SubmissionEmailColumns, SurveyJson } from "./types";
 import {
   fetchOwnMember,
   type GuestMemberSummary,
@@ -687,6 +687,23 @@ function mapSubmission(
     versionLayerConfig: layerConfigByFormVersion?.[listTitle]?.[surveySnapshotKey(formVersion, publishKey)] ?? null,
     surveyJson,
     isTest: isTestRow(raw),
+    emailColumns: readEmailColumns(raw),
+  };
+}
+
+/** The workflow email columns, kept raw for the Emails sent & pending tab. */
+function readEmailColumns(raw: Record<string, unknown>): SubmissionEmailColumns {
+  const layerStatuses: Record<number, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const match = /^L(\d+)_Status$/.exec(key);
+    if (match && value !== null && value !== undefined && value !== "") layerStatuses[Number(match[1])] = String(value);
+  }
+  return {
+    currentLayer: Math.max(Number(raw.CurrentLayer) || 0, Number(raw.CurrentApprovalLayer) || 0),
+    scheduleRaw: raw.WorkflowEmailSchedule,
+    logRaw: raw.WorkflowEmailLog,
+    assignmentRaw: raw.WorkflowAssignmentData,
+    layerStatuses,
   };
 }
 

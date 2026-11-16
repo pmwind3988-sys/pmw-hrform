@@ -77,6 +77,22 @@ export interface Submission {
   surveyJson?: SurveyJson | null;
   /** Whether this row is a test-run rehearsal rather than a production submission. */
   isTest: boolean;
+  /**
+   * The row's workflow email columns as stored, for the Emails sent & pending
+   * tab in Available forms. Compiled by `compileEmailSchedule`, the same as All
+   * Submissions → Email schedule.
+   */
+  emailColumns?: SubmissionEmailColumns;
+}
+
+export interface SubmissionEmailColumns {
+  /** Raw `CurrentLayer` / `CurrentApprovalLayer`, before any display adjustment. */
+  currentLayer: number;
+  scheduleRaw: unknown;
+  logRaw: unknown;
+  assignmentRaw: unknown;
+  /** Raw `L{n}_Status` by step number. */
+  layerStatuses: Record<number, string>;
 }
 
 export interface HardDeleteSubmissionResult {
