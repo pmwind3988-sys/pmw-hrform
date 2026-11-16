@@ -2471,18 +2471,44 @@ export async function writeMatrixChildItems(
     }
     Object.assign(body, encodeMatrixRow(normalizedRow, columns as MatrixColumn[], resolveColumnKey));
 
-    const result = await spPost(
-      token,
-      `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items`,
-      body
-    ) as { Id?: number };
-
-    if (result.Id != null) {
-      createdIds.push(result.Id);
+    // A cell SharePoint refuses (a date or number it cannot read) must not cost
+    // the row, nor every row after it. The response item's `<question>_Json`
+    // keeps the full row whatever happens here, and the views fill from it.
+    const url = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items`;
+    const attempts = [body, ...matrixRowFallbacks(body, columns, resolveColumnKey)];
+    for (const attempt of attempts) {
+      try {
+        const result = await spPost(token, url, attempt) as { Id?: number };
+        if (result.Id != null) createdIds.push(result.Id);
+        break;
+      } catch {
+        // Try the next, smaller body; the last holds only the row's position.
+      }
     }
   }
 
   return createdIds;
+}
+
+const MATRIX_TEXT_CELL_TYPES = new Set(["", "text", "comment"]);
+
+/**
+ * Smaller bodies to retry a refused child row with: first without the typed
+ * cells (dates, numbers, choices, ticks), then with only the row's place.
+ */
+function matrixRowFallbacks(
+  body: Record<string, unknown>,
+  columns: MatrixColumnDef[],
+  resolveColumnKey: (name: string) => string | null | undefined,
+): Record<string, unknown>[] {
+  const typedKeys = new Set(
+    columns
+      .filter((col) => col.name && !MATRIX_TEXT_CELL_TYPES.has(String(col.cellType ?? "")))
+      .flatMap((col) => [col.name, resolveColumnKey(col.name)].filter((key): key is string => Boolean(key))),
+  );
+  const textOnly = Object.fromEntries(Object.entries(body).filter(([key]) => !typedKeys.has(key)));
+  const placeOnly: Record<string, unknown> = { ParentResponseId: body.ParentResponseId, RowIndex: body.RowIndex };
+  return [textOnly, placeOnly];
 }
 
 /**

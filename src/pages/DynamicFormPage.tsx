@@ -61,7 +61,7 @@ import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { buildManualPaperSubmissionEmail } from "../utils/manualPaperEmail";
 import { isTrainingNeedsAnalysisForm, manualPaperDesign } from "../utils/paperPdf/paperForms";
-import PaperNeedsAnalysisInput, { compactNeedsAnswers, unfinishedNeedsRows, needsAnalysisQuestions, requirePreparedDesignation } from "../components/paper/PaperNeedsAnalysisInput";
+import PaperNeedsAnalysisInput, { compactNeedsAnswers, focusPartialNeedsDate, unfinishedNeedsRows, needsAnalysisQuestions, requirePreparedDesignation } from "../components/paper/PaperNeedsAnalysisInput";
 import { parseValidEmailList, writeLayerRecipientFields } from "../utils/layerRecipients";
 import { expandLayerDistributionList } from "../utils/expandLayerGroup";
 import {
@@ -1426,6 +1426,8 @@ export default function DynamicFormPage() {
       if (table) document.getElementById(`field-${table.name}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
       return false;
     }
+    // A date typed only in part looks filled in but would be saved as no date at all.
+    if (paperNeedsAnalysis && focusPartialNeedsDate()) return false;
 
     if (!pdpaAccepted) {
       setPdpaConsentError(pdpa.ui.consentRequired);

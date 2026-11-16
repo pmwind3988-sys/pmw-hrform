@@ -276,6 +276,23 @@ function PeopleCell({ people, lineKey, label, idShare, disabled, onChange, onFoc
   );
 }
 
+const PARTIAL_DATE_MESSAGE = "Finish the date: day, month and year.";
+
+/**
+ * Tentative Date boxes holding a date typed only in part. The browser reports
+ * such a box as empty, so the answers alone cannot see it; it is read off the
+ * page. The first one is scrolled to and focused, which also shows its message.
+ */
+export function focusPartialNeedsDate(): boolean {
+  const partial = [...document.querySelectorAll<HTMLInputElement>('.pna-sched input[type="date"]')].find((input) => input.validity.badInput);
+  if (!partial) return false;
+  partial.scrollIntoView({ behavior: "smooth", block: "center" });
+  partial.focus({ preventScroll: true });
+  partial.blur();
+  partial.focus({ preventScroll: true });
+  return true;
+}
+
 /**
  * The Tentative Date box: the date and how many back-to-back days. The form
  * no longer asks a time, so a row written here keeps no start or end.
@@ -291,7 +308,10 @@ function ScheduleCell({ row, cols, label, disabled, onWrite }: { row: NeedsRow |
     if (cols.days) cells[cols.days.name] = v.days ?? undefined;
     onWrite(cells);
   };
-  const problem = scheduleProblem(input);
+  // A date typed only in part (15/02/yyyy) shows in the box but reads as empty, so it would be dropped without a word.
+  const [partial, setPartial] = useState(false);
+  const checkPartial = (e: { currentTarget: HTMLInputElement }) => setPartial(e.currentTarget.validity.badInput);
+  const problem = partial ? PARTIAL_DATE_MESSAGE : scheduleProblem(input);
   const summary = problem ? "" : formatSchedule(input);
   return (
     <div className="pna-sched" role="group" aria-label={label}>
@@ -302,8 +322,11 @@ function ScheduleCell({ row, cols, label, disabled, onWrite }: { row: NeedsRow |
           value={input.firstDay}
           disabled={disabled}
           aria-label={`${label}: date`}
+          aria-invalid={partial ? true : undefined}
+          onKeyUp={checkPartial}
+          onBlur={checkPartial}
           // Picking a date with no length yet means a one-day course until told otherwise.
-          onChange={(e) => write({ ...input, firstDay: e.target.value, days: e.target.value && !input.days ? 1 : input.days })}
+          onChange={(e) => { checkPartial(e); write({ ...input, firstDay: e.target.value, days: e.target.value && !input.days ? 1 : input.days }); }}
         />
       </label>
       <label className="pna-sched-line">

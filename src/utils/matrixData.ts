@@ -308,26 +308,46 @@ const isBlankCell = (value: unknown): boolean =>
  * while the response item still held it. The saved copy is written from the
  * same answer at the same moment, so row for row it is the same data.
  *
- * Only blanks are filled, and only when both hold the same number of rows —
- * otherwise there is no telling which saved row belongs to which.
+ * Only blanks are filled. When both hold the same number of rows they pair up
+ * in order. When the saved copy holds more — a row the child list refused, or
+ * every row after it — the saved copy decides how many rows there are, and each
+ * child row is placed by its `RowIndex`, so nothing that was submitted goes
+ * missing from the view.
  */
 export function fillMissingMatrixCells(rows: MatrixRow[], saved: unknown): MatrixRow[] {
+  const copy = savedMatrixRows(saved);
+  if (!copy) return rows;
+  if (copy.length === rows.length) return rows.map((row, index) => fillRow(row, copy[index]));
+  if (copy.length < rows.length) return rows;
+  const byIndex = new Map<number, MatrixRow>();
+  rows.forEach((row, at) => {
+    const index = Number(row.RowIndex);
+    byIndex.set(Number.isInteger(index) && index >= 0 ? index : at, row);
+  });
+  return copy.map((kept, index) => {
+    const row = byIndex.get(index);
+    return row ? fillRow(row, kept) : { ...kept };
+  });
+}
+
+/** The rows kept on the response item (`<question>_Json`), or null when there is no readable copy. */
+export function savedMatrixRows(saved: unknown): MatrixRow[] | null {
   let copy: unknown = saved;
   if (typeof saved === "string") {
     try {
       copy = JSON.parse(saved);
     } catch {
-      return rows;
+      return null;
     }
   }
-  if (!Array.isArray(copy) || copy.length !== rows.length) return rows;
-  return rows.map((row, index) => {
-    const kept: unknown = copy[index];
-    if (!kept || typeof kept !== "object" || Array.isArray(kept)) return row;
-    const filled: MatrixRow = { ...row };
-    for (const [key, value] of Object.entries(kept as Record<string, unknown>)) {
-      if (isBlankCell(filled[key]) && !isBlankCell(value)) filled[key] = value;
-    }
-    return filled;
-  });
+  if (!Array.isArray(copy)) return null;
+  return copy.map((kept) => (kept && typeof kept === "object" && !Array.isArray(kept) ? kept as MatrixRow : {}));
+}
+
+function fillRow(row: MatrixRow, kept: MatrixRow): MatrixRow {
+  const filled: MatrixRow = { ...row };
+  for (const [key, value] of Object.entries(kept)) {
+    if (isBlankCell(filled[key]) && !isBlankCell(value)) filled[key] = value;
+  }
+  return filled;
 }

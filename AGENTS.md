@@ -51,6 +51,7 @@ npx vitest run     # ~77 unit tests in src/utils/__tests__/FormBuilderEngine.tes
 - `dynamicmatrix` fields provision **child lists** named `{FormTitle} Matrix {FieldName}` (NOT just `_Html`/`_Json` columns on the main list).
 - Child list columns: `ParentResponseId` (Number), `RowIndex` (Number), plus per-matrix-column fields mapped by cellType.
 - `_Html`/`_Json` columns still created for backward compatibility but child list is primary storage.
+- **`_Json` is the complete copy; the child list may be short.** A child row SharePoint refuses is retried without its typed cells (date/number/choice), then with only `ParentResponseId`/`RowIndex` — on both submit paths (`writeMatrixChildItems`, `api/submit-form.ts`) — and never stops the rows after it. Readers (`fillMissingMatrixCells`, `formSubmissionLayout` `matrixRows`) fill blanks and missing rows from `_Json` by `RowIndex`, and read `_Json` alone when there are no child rows. The Training Needs Analysis date box blocks Submit on a half-typed date (`focusPartialNeedsDate`), because a browser reports one as empty.
 
 ### SurveyJS Custom Widget Registration Pattern
 ```

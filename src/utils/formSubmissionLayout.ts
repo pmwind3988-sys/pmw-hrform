@@ -1,5 +1,5 @@
 import { isManagedCompanyQuestion } from "./companySelection";
-import { fillMissingMatrixCells } from "./matrixData";
+import { fillMissingMatrixCells, savedMatrixRows } from "./matrixData";
 
 type SurveyElement = Record<string, unknown>;
 
@@ -209,7 +209,10 @@ function matrixRows(key: string, responseData: Record<string, unknown>, lookup: 
     return directValue.filter(isRecord);
   }
 
-  return [];
+  // No child rows (none were saved there, or they could not be read): the copy on the response item still holds every row.
+  const savedKey = resolveResponseKey(responseData, lookup, `${key}_Json`);
+  const saved = savedKey ? savedMatrixRows(responseData[savedKey]) : null;
+  return saved ? saved.filter((row) => Object.keys(row).length > 0) : [];
 }
 
 function responseValueForElement(

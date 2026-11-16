@@ -2186,17 +2186,36 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 if (value !== undefined) fields[col.name] = value;
               }
             }
-            try {
-              const item = await createListItem(token, childListDisplayName, fields);
-              if (item.id) {
-                childIds.push(Number(item.id));
-                childItemRefs.push({ listTitle: childListDisplayName, itemId: item.id });
+            // A cell SharePoint refuses (a date or number it cannot read) must not fail the
+            // submission: retry without the typed cells, then with only the row's place.
+            // The response item's `<question>_Json` keeps the full row, and the views fill from it.
+            const typedNames = new Set(columns.filter((col) => col.name && !["", "text", "comment"].includes(String(col.cellType ?? ""))).map((col) => col.name));
+            const attempts = [
+              fields,
+              Object.fromEntries(Object.entries(fields).filter(([key]) => !typedNames.has(key))),
+              { ParentResponseId: fields.ParentResponseId, RowIndex: fields.RowIndex },
+            ];
+            let saved = false;
+            let lastError: unknown;
+            for (const [attempt, attemptFields] of attempts.entries()) {
+              try {
+                const item = await createListItem(token, childListDisplayName, attemptFields);
+                if (item.id) {
+                  childIds.push(Number(item.id));
+                  childItemRefs.push({ listTitle: childListDisplayName, itemId: item.id });
+                }
+                if (attempt > 0) logWarn("api:submit-form", "Matrix child item saved without some cells", { fieldName, rowIndex: i, attempt });
+                saved = true;
+                break;
+              } catch (e) {
+                lastError = e;
               }
-            } catch (e) {
+            }
+            if (!saved) {
               logWarn("api:submit-form", "Matrix child item write failed", {
                 fieldName,
                 rowIndex: i,
-                errorMessage: e instanceof Error ? e.message : String(e),
+                errorMessage: lastError instanceof Error ? lastError.message : String(lastError),
               });
               throw new PublicSubmissionError(`Could not save matrix field "${fieldName}". Please try again.`, 500);
             }

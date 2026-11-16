@@ -202,10 +202,30 @@ describe("fillMissingMatrixCells", () => {
     ]);
   });
 
-  it("leaves the rows alone when the copy is missing, unreadable or a different length", () => {
+  it("leaves the rows alone when the copy is missing, unreadable or shorter", () => {
     expect(fillMissingMatrixCells(child, undefined)).toBe(child);
     expect(fillMissingMatrixCells(child, "not json")).toBe(child);
     expect(fillMissingMatrixCells(child, JSON.stringify([{ Name: "Tan" }]))).toBe(child);
+  });
+
+  it("puts back rows the child list refused, placing the saved ones by RowIndex", () => {
+    const savedThree = JSON.stringify([
+      { Name: "Tan", Tentative_Date: "2027-02-15" },
+      { Name: "Ravi", Tentative_Date: "15/02" },
+      { Name: "Lim", Tentative_Days: 2 },
+    ]);
+    // Row 1 never reached the child list; rows 0 and 2 did.
+    expect(fillMissingMatrixCells([{ RowIndex: 0, Name: "Tan" }, { RowIndex: 2, Name: "Lim" }], savedThree)).toEqual([
+      { RowIndex: 0, Name: "Tan", Tentative_Date: "2027-02-15" },
+      { Name: "Ravi", Tentative_Date: "15/02" },
+      { RowIndex: 2, Name: "Lim", Tentative_Days: 2 },
+    ]);
+  });
+
+  it("fills a row saved with only its place from the copy", () => {
+    expect(fillMissingMatrixCells([{ RowIndex: 0 }], JSON.stringify([{ Name: "Tan", Tentative_Date: "2027-02-15" }]))).toEqual([
+      { RowIndex: 0, Name: "Tan", Tentative_Date: "2027-02-15" },
+    ]);
   });
 });
 

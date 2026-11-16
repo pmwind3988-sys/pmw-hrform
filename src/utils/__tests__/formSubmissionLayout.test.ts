@@ -26,3 +26,20 @@ describe("reading an answer stored under a column name SharePoint cut short", ()
     expect(read({ type: "radiogroup", name: "trainingRoomAndFacilitiesWereAdequateAndComfortable" }).value).toBe("Neutral");
   });
 });
+
+describe("reading a table whose rows never reached the child list", () => {
+  const table = { type: "matrixdynamic", name: "dynamicMatrix", columns: [{ name: "Name" }, { name: "Tentative_Date", cellType: "date" }] };
+
+  it("reads every row from the copy kept on the response item", () => {
+    const read = createElementAnswerReader({ dynamicMatrix_Json: JSON.stringify([{ Name: "Tan", Tentative_Date: "2027-02-15" }, { Name: "Lim" }]) });
+    expect(read(table).matrixRows).toEqual([{ Name: "Tan", Tentative_Date: "2027-02-15" }, { Name: "Lim" }]);
+  });
+
+  it("fills a child row's missing date from that copy", () => {
+    const read = createElementAnswerReader({
+      dynamicMatrix_childRows: { rows: [{ RowIndex: 0, Name: "Tan" }] },
+      dynamicMatrix_Json: JSON.stringify([{ Name: "Tan", Tentative_Date: "2027-02-15" }]),
+    });
+    expect(read(table).matrixRows).toEqual([{ RowIndex: 0, Name: "Tan", Tentative_Date: "2027-02-15" }]);
+  });
+});
