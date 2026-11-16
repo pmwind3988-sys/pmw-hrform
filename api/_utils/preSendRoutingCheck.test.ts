@@ -276,6 +276,58 @@ describe("checkBeforeSend", () => {
     expect(mail.sendGraphEmail).not.toHaveBeenCalled();
   });
 
+  it("counts a later look at a step it parked on the hold line, adding no new line", async () => {
+    delete directory["staff@pmw.com"];
+    await check();
+    const [first] = readRoutingChecks(stored.WorkflowAssignmentData);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    await expect(check()).resolves.toMatchObject({ outcome: "not-checkable", hold: false });
+    const checks = readRoutingChecks(stored.WorkflowAssignmentData);
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({ outcome: "held-no-routing", count: 2, firstAt: first.at, note: first.note });
+    expect(checks[0].at > first.at).toBe(true);
+    expect(mail.sendGraphEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs a parked step as not checkable when its latest line is not the hold", async () => {
+    delete directory["staff@pmw.com"];
+    stored = row({ L2_Status: "Needs Routing", L2_Email: "", L2_Emails: "", L2_NotifyEmails: "" });
+    await expect(check()).resolves.toMatchObject({ outcome: "not-checkable" });
+    expect(readRoutingChecks(stored.WorkflowAssignmentData)).toMatchObject([{ outcome: "not-checkable" }]);
+  });
+
+  it("leaves a hand-reassigned step alone from the row alone, even when the workflow cannot be read", async () => {
+    stored = row({
+      L2_Email: "picked@pmw.com", L2_Emails: "picked@pmw.com; pa@pmw.com", L2_NotifyEmails: "picked@pmw.com; pa@pmw.com",
+      WorkflowAssignmentData: JSON.stringify({
+        version: 1,
+        layers: { 2: { layer: 2, email: "picked@pmw.com", source: "manual-override", updatedBy: "admin@pmw.com", updatedAt: "2026-09-01T00:00:00.000Z", history: [] } },
+      }),
+    });
+    graph.queryMasterFormByTitle.mockRejectedValue(new Error("Graph GET 503"));
+    graph.queryListItemByFields.mockRejectedValue(new Error("Graph GET 503"));
+    const result = await check();
+    expect(result).toMatchObject({
+      outcome: "left-alone", hold: false, recipients: ["picked@pmw.com", "pa@pmw.com"], primary: "picked@pmw.com",
+    });
+    expect(graph.queryMasterFormByTitle).not.toHaveBeenCalled();
+    expect(graph.queryListItemByFields).not.toHaveBeenCalled();
+    expect(patches().every((patch) => Object.keys(patch).join() === "WorkflowAssignmentData")).toBe(true);
+    expect(readRoutingChecks(stored.WorkflowAssignmentData)).toMatchObject([{ outcome: "left-alone", saved: ["picked@pmw.com", "pa@pmw.com"] }]);
+  });
+
+  it("still sends a hand-reassigned step when its check cannot be logged", async () => {
+    stored = row({
+      WorkflowAssignmentData: JSON.stringify({
+        version: 1,
+        layers: { 2: { layer: 2, email: "hod@pmw.com", source: "manual-override", updatedBy: "admin@pmw.com", updatedAt: "2026-09-01T00:00:00.000Z", history: [] } },
+      }),
+    });
+    graph.updateListItemFields.mockRejectedValue(new Error("Graph PATCH 503"));
+    await expect(check()).resolves.toMatchObject({ outcome: "left-alone", hold: false, recipients: ["hod@pmw.com"] });
+  });
+
   it("leaves a decided step alone, with no write", async () => {
     stored = row({ L2_Status: "Confirmed", L2_Email: "old.hod@pmw.com", L2_Emails: "old.hod@pmw.com", L2_NotifyEmails: "old.hod@pmw.com" });
     await expect(check()).resolves.toMatchObject({ outcome: "not-checkable", hold: false, recipients: ["old.hod@pmw.com"] });

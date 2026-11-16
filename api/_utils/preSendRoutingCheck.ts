@@ -44,6 +44,8 @@ import {
 import type { SubmitterRoutingRule } from "./evaluationSubmitterRouting.js";
 import { isRoutingCheckedForm } from "./routingCheckedForms.js";
 import {
+  getWorkflowAssignment,
+  readRoutingChecks,
   recordRoutingCheck,
   setWorkflowAssignmentOverride,
   type RoutingCheckEntry,
@@ -458,6 +460,19 @@ export async function checkBeforeSend(token: string, params: PreSendCheckParams)
     ) {
       return finish(params, unchanged("not-checkable", "This step or submission has already been decided."));
     }
+    // A step reassigned by hand is never changed, so nothing else needs
+    // reading: a workflow that cannot be read must not hold it either.
+    if (getWorkflowAssignment(row.WorkflowAssignmentData, layer)?.source === "manual-override") {
+      await writeCheckLog(token, params, listTitle, row, {
+        at: new Date().toISOString(),
+        layer,
+        trigger: params.trigger,
+        outcome: "left-alone",
+        saved: stored.saved,
+        routed: [],
+      });
+      return finish(params, unchanged("left-alone"));
+    }
 
     const cache = params.cache ?? createPreSendCheckCache(token);
     const formConfig = await loadMasterForm(token, cache, formTitle);
@@ -493,7 +508,13 @@ export async function checkBeforeSend(token: string, params: PreSendCheckParams)
       verdict.kind === "waiting"
       || (verdict.kind === "unresolved" && (isNeedsRoutingStatus(status) || isManualPaperStatus(status)))
     ) {
-      await writeCheckLog(token, params, listTitle, row, entry("not-checkable"));
+      // A step this check parked stays one hold line: a later look only moves
+      // that line's count and time, so the log still reads "on hold".
+      const latest = readRoutingChecks(row.WorkflowAssignmentData).filter((check) => check.layer === layer).pop();
+      const line = isNeedsRoutingStatus(status) && latest?.outcome === "held-no-routing"
+        ? { ...latest, at: now }
+        : entry("not-checkable");
+      await writeCheckLog(token, params, listTitle, row, line);
       return finish(params, unchanged("not-checkable", verdict.note));
     }
     if (verdict.kind === "match" || verdict.kind === "manual") {
@@ -534,7 +555,7 @@ export async function checkBeforeSend(token: string, params: PreSendCheckParams)
       try {
         await updateListItemFields(token, listTitle, itemId, patch);
       } catch (error) {
-        throw new Error(`The correction could not be saved on the submission: ${errorText(error, "unknown error")}`);
+        throw new Error(`The correction could not be saved on the submission: ${errorText(error, "unknown error")}`, { cause: error });
       }
       return finish(params, {
         outcome: "corrected", hold: false, recipients, primary, fields: { ...row, ...patch },
@@ -548,7 +569,7 @@ export async function checkBeforeSend(token: string, params: PreSendCheckParams)
     try {
       await updateListItemFields(token, listTitle, itemId, parkPatch);
     } catch (error) {
-      throw new Error(`The step could not be put on hold: ${errorText(error, "unknown error")}`);
+      throw new Error(`The step could not be put on hold: ${errorText(error, "unknown error")}`, { cause: error });
     }
     let parked: Record<string, unknown> = { ...row, ...parkPatch };
     const noteLine = `Layer ${layer}: ${reason}`;

@@ -7,7 +7,13 @@
  * check, which must agree on it: a check against a different workflow than the
  * reviewer page then opens would correct a step to the wrong people.
  */
-import { queryListItemByFields, queryWebFormVersion } from "./graphClient.js";
+import {
+  graphFieldEquals,
+  queryListItemByFields,
+  queryListItems,
+  queryWebFormVersion,
+  type GraphListItem,
+} from "./graphClient.js";
 
 export interface SubmissionLayerConfig {
   layers: Record<string, unknown>[];
@@ -74,6 +80,27 @@ function parseJsonRecord(value: unknown): Record<string, unknown> | null {
   }
 }
 
+/**
+ * With no publish key anywhere, the version's row is used only when it is the
+ * only one: with rows for several profiles there is no telling which workflow
+ * the submission was made under, so the check must fail rather than guess.
+ */
+async function readOnlyVersionRow(
+  token: string,
+  formTitle: string,
+  formVersion: string,
+): Promise<GraphListItem | null> {
+  const rows = await queryListItems(token, "Web Form Versions", {
+    filter: [graphFieldEquals("FormTitle", formTitle), graphFieldEquals("FormVersion", formVersion)].join(" and "),
+    top: 2,
+    preferNonIndexed: true,
+  });
+  if (rows.length > 1) {
+    throw new Error("The form version this submission was made under has more than one publish profile, and the submission records none.");
+  }
+  return rows[0] ?? null;
+}
+
 /** Which version and profile a submission was made under. */
 export function submissionVersionKey(
   formConfig: Record<string, unknown>,
@@ -94,7 +121,10 @@ export function submissionVersionKey(
  * pre-send routing check). It reads exactly the version and publish key the
  * row records and throws when that row cannot be read, instead of quietly using
  * the Master Form's current workflow, which the submission may not have been
- * made under. Only a row that records no form version (older submissions) falls
+ * made under. A row with a version but no publish key is read under the Master
+ * Form's current key, as the reviewer page reads it; with no key there either,
+ * the version's only row is used, and several rows throw (no guessing). Only a
+ * row that records no form version (older submissions) falls
  * back to the Master Form, as the reviewer page does; so does a version row
  * that was read but carries no layer config.
  */
@@ -108,19 +138,23 @@ export async function loadSubmissionLayerConfig(
   let versionRow: Record<string, unknown> | null | undefined;
   if (options.strict) {
     const recordedVersion = String(itemFields.FormVersion || "").trim();
-    const recordedKey = String(itemFields.PublishKey || "").trim();
+    // A row that records no publish key is read under the Master Form's current
+    // one, the key the reviewer page uses (`submissionVersionKey`).
+    const key = String(itemFields.PublishKey || formConfig.CurrentPublishKey || "").trim();
     if (recordedVersion) {
       // queryWebFormVersion falls back past a failed or empty keyed read; this must not.
-      const row = await queryListItemByFields(token, "Web Form Versions", {
-        FormTitle: formTitle,
-        FormVersion: recordedVersion,
-        ...(recordedKey ? { PublishKey: recordedKey } : {}),
-      });
+      const row = key
+        ? await queryListItemByFields(token, "Web Form Versions", {
+          FormTitle: formTitle,
+          FormVersion: recordedVersion,
+          PublishKey: key,
+        })
+        : await readOnlyVersionRow(token, formTitle, recordedVersion);
       if (!row || parseVersionPayload(row.fields.SurveyJSON).surveyJson === null) {
         throw new Error("The form version this submission was made under could not be read.");
       }
       versionRow = row.fields;
-      if (recordedKey && recordedKey !== DEFAULT_PUBLISH_KEY) {
+      if (key && key !== DEFAULT_PUBLISH_KEY) {
         versionRow = await withDefaultProfileSurvey(token, formTitle, recordedVersion, versionRow);
       }
     }

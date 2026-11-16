@@ -77,6 +77,11 @@ export async function decideBeforeSend(
   if (result.outcome === "skipped") return { action: "as-before" };
   if (result.outcome === "not-checkable") return { action: "as-before", notCheckable: { fields: result.fields } };
   if (result.recipients.length === 0) {
+    logWarn(logScope, "Routing gave nobody to send to; holding the email", {
+      formTitle: params.formTitle,
+      itemId: params.itemId,
+      layer: params.layer,
+    });
     return { action: "hold", reason: "Routing gave nobody to send to.", checkFailed: false, fields: result.fields };
   }
   return {
@@ -129,6 +134,9 @@ export type FirstRequestEmailGate =
  * and an evaluation's email that is only being scheduled for later (the daily
  * run checks it again when it falls due). A failed check otherwise leaves a
  * `scheduled` entry for the next daily run, which checks again before sending.
+ * An evaluation scheduled for later on a step the check has just parked keeps
+ * its entry addressed to the old people; that is intended: the daily run checks
+ * it again when it falls due, and it goes out only once HR has named someone.
  */
 export async function gateFirstRequestEmail(token: string, input: FirstRequestEmailInput): Promise<FirstRequestEmailGate> {
   const asBefore = (fields: Record<string, unknown>): FirstRequestEmailGate => ({

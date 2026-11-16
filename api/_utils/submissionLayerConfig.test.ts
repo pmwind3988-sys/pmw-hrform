@@ -9,6 +9,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const graph = vi.hoisted(() => ({
   queryListItemByFields: vi.fn(),
   queryWebFormVersion: vi.fn(),
+  queryListItems: vi.fn(),
+  graphFieldEquals: (column: string, value: string) => `fields/${column} eq '${value}'`,
 }));
 vi.mock("./graphClient.js", () => graph);
 
@@ -60,6 +62,42 @@ describe("loadSubmissionLayerConfig, strict", () => {
     await expect(strict({ FormVersion: "1.0", PublishKey: "hr-only" })).rejects.toThrow("could not be read");
     byKey({ "hr-only": new Error("Graph GET 503") });
     await expect(strict({ FormVersion: "1.0", PublishKey: "hr-only" })).rejects.toThrow("503");
+  });
+
+  describe("a row with a version but no publish key", () => {
+    it("reads the Master Form's current profile, as the reviewer page does", async () => {
+      byKey({ "hr-only": versionRow(STALE, PROFILE_LAYERS), production: versionRow(CURRENT) });
+      const loaded = await loadSubmissionLayerConfig("tok", FORM, { ...master, CurrentPublishKey: "hr-only" }, { FormVersion: "1.0" }, { strict: true });
+      expect(loaded).toMatchObject({ layerConfig: PROFILE_LAYERS, surveyJson: CURRENT });
+      expect(graph.queryListItemByFields.mock.calls[0][2]).toEqual({ FormTitle: FORM, FormVersion: "1.0", PublishKey: "hr-only" });
+      expect(graph.queryListItems).not.toHaveBeenCalled();
+    });
+
+    it("throws when the Master Form's current profile has no row for that version", async () => {
+      byKey({ production: versionRow(CURRENT, PROFILE_LAYERS) });
+      await expect(loadSubmissionLayerConfig("tok", FORM, { ...master, CurrentPublishKey: "hr-only" }, { FormVersion: "1.0" }, { strict: true }))
+        .rejects.toThrow("could not be read");
+      expect(graph.queryListItems).not.toHaveBeenCalled();
+    });
+
+    it("uses the version's only row when the Master Form names no profile either", async () => {
+      graph.queryListItems.mockResolvedValue([versionRow(CURRENT, PROFILE_LAYERS)]);
+      await expect(strict({ FormVersion: "1.0" })).resolves.toMatchObject({ layerConfig: PROFILE_LAYERS, surveyJson: CURRENT });
+      expect(graph.queryListItems.mock.calls[0][2]).toMatchObject({
+        filter: `fields/FormTitle eq '${FORM}' and fields/FormVersion eq '1.0'`,
+      });
+      expect(graph.queryListItemByFields).not.toHaveBeenCalled();
+    });
+
+    it("throws when the version has rows for more than one profile", async () => {
+      graph.queryListItems.mockResolvedValue([versionRow(CURRENT, PROFILE_LAYERS), versionRow(STALE, PROFILE_LAYERS)]);
+      await expect(strict({ FormVersion: "1.0" })).rejects.toThrow("more than one");
+    });
+
+    it("throws when the version has no row at all", async () => {
+      graph.queryListItems.mockResolvedValue([]);
+      await expect(strict({ FormVersion: "1.0" })).rejects.toThrow("could not be read");
+    });
   });
 
   it("uses the Master Form for a row with no version, or a version with no workflow of its own", async () => {
