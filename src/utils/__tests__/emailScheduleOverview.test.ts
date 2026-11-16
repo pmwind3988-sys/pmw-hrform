@@ -68,26 +68,59 @@ describe("compileEmailSchedule", () => {
     expect(entries[0].state).toBe("failed");
   });
 
-  it("puts an entry whose latest routing check is a hold under needs attention", () => {
+  describe("routing holds", () => {
     const checks = (outcomes: string[]) => JSON.stringify({
       checks: outcomes.map((outcome, index) => ({
         at: `2026-10-1${index}T00:00:00.000Z`, layer: 2, trigger: "daily-run", outcome, saved: [], routed: [],
       })),
     });
-    const entries = compileEmailSchedule([
-      row(1, {}, { assignmentRaw: checks(["match", "held-no-routing"]) }),
-      row(2, {}, { assignmentRaw: checks(["held-check-failed", "corrected"]) }),
-      row(3, {}, { assignmentRaw: checks(["held-no-routing"]).replace('"layer":2', '"layer":1') }),
-      row(4, { status: "sent" }, { assignmentRaw: checks(["held-no-routing"]) }),
-    ], NOW);
-    const byId = Object.fromEntries(entries.map((e) => [e.itemId, e]));
-    expect(byId[1].state).toBe("held");
-    expect(emailScheduleLabel(byId[1])).toBe("On hold: routing has no answer");
-    expect(byId[1].selectable).toBe(false);
-    expect(entries[0].itemId).toBe(1);
-    expect(byId[2].state).not.toBe("held");
-    expect(byId[3].state).not.toBe("held");
-    expect(byId[4].state).toBe("sent-alone");
+    const parked = { layerStatuses: { 2: "Needs Routing" } };
+
+    it("holds a parked step whatever its latest check says, and it cannot be picked", () => {
+      const entries = compileEmailSchedule([
+        row(1, {}, { ...parked, assignmentRaw: checks(["held-no-routing", "not-checkable"]) }),
+        row(2, {}, parked),
+        row(3, { dueAt: "2027-01-10T00:00:00.000Z" }, { ...parked, assignmentRaw: checks(["held-no-routing"]) }),
+        row(4, { status: "sent" }, parked),
+      ], NOW);
+      const byId = Object.fromEntries(entries.map((e) => [e.itemId, e]));
+      for (const id of [1, 2, 3]) {
+        expect(byId[id]).toMatchObject({ state: "held", heldOutcome: "held-no-routing", selectable: false });
+      }
+      expect(emailScheduleLabel(byId[1])).toBe("On hold: routing has no answer");
+      expect(entries[0].state).toBe("held");
+      expect(byId[4].state).toBe("sent-alone");
+    });
+
+    it("releases a no-routing hold once the step is no longer parked, whatever the log still says", () => {
+      const [entry] = compileEmailSchedule([
+        row(1, { dueAt: "2027-01-10T00:00:00.000Z" }, { layerStatuses: { 2: "Pending" }, assignmentRaw: checks(["held-no-routing"]) }),
+      ], NOW);
+      expect(entry).toMatchObject({ state: "later", selectable: true });
+    });
+
+    it("holds a failed check until it retries, but lets the admin retry it by hand", () => {
+      const entries = compileEmailSchedule([
+        row(1, {}, { assignmentRaw: checks(["match", "held-check-failed"]) }),
+        row(2, {}, { assignmentRaw: checks(["held-check-failed", "corrected"]) }),
+        row(3, {}, { assignmentRaw: checks(["held-check-failed"]).replace('"layer":2', '"layer":1') }),
+      ], NOW);
+      const byId = Object.fromEntries(entries.map((e) => [e.itemId, e]));
+      expect(byId[1]).toMatchObject({ state: "held", heldOutcome: "held-check-failed", selectable: true });
+      expect(emailScheduleLabel(byId[1])).toBe("On hold: could not check, will retry");
+      expect(byId[2].state).not.toBe("held");
+      expect(byId[3].state).not.toBe("held");
+    });
+
+    it("leaves a held entry out of its recipient's summary", () => {
+      const entries = compileEmailSchedule([
+        row(1, {}, parked),
+        row(2, {}),
+      ], NOW);
+      const byId = Object.fromEntries(entries.map((e) => [e.itemId, e]));
+      expect(byId[1].state).toBe("held");
+      expect(byId[2].state).toBe("next-alone");
+    });
   });
 
   it("drops an unsent schedule for a step the submission has moved past", () => {

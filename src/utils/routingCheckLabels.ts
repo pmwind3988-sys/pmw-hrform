@@ -8,7 +8,7 @@ const OUTCOME_LABELS: Record<RoutingCheckOutcome, string> = {
   match: "Matches routing",
   corrected: "Corrected",
   "left-alone": "Set by hand, left alone",
-  "not-checkable": "Not checked yet",
+  "not-checkable": "Nothing to check",
   "held-no-routing": "On hold: routing has no answer",
   "held-check-failed": "On hold: could not check, will retry",
 };

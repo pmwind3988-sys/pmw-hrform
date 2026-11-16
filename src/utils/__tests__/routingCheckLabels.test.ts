@@ -7,7 +7,7 @@ describe("routingCheckLabels", () => {
     expect(routingCheckOutcomeLabel("match")).toBe("Matches routing");
     expect(routingCheckOutcomeLabel("corrected")).toBe("Corrected");
     expect(routingCheckOutcomeLabel("left-alone")).toBe("Set by hand, left alone");
-    expect(routingCheckOutcomeLabel("not-checkable")).toBe("Not checked yet");
+    expect(routingCheckOutcomeLabel("not-checkable")).toBe("Nothing to check");
     expect(routingCheckOutcomeLabel("held-no-routing")).toBe("On hold: routing has no answer");
     expect(routingCheckOutcomeLabel("held-check-failed")).toBe("On hold: could not check, will retry");
   });

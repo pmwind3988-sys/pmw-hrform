@@ -80,6 +80,7 @@ import {
   updateScheduledWorkflowEmailRecipient,
 } from "../../utils/workflowEmailSchedule";
 import { getWorkflowAssignment, readRoutingChecks, setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentData";
+import { typedAddressAssignment } from "../../utils/typedAddressAssignment";
 import {
   inspectLayerRouting as inspectSharedLayerRouting,
   type InspectableLayer,
@@ -2130,6 +2131,18 @@ export default function ApprovalDashboard() {
         ? shouldUseManualPaperForSender(currentLayer, recipient) ? [recipient] : await withDirectoryStandIns(token, recipient)
         : parseValidEmailList(rawItem[`L${currentLayerNumber}_Emails`] || recipient);
       const resendRecipients = writeLayerRecipientFields(patchBody, currentLayer, resendActors, recipient);
+      // A different address typed here is a hand reassignment; without saying so
+      // the routing check would put the routed person back and mail them instead.
+      const handAssignment = manualRecipient
+        ? typedAddressAssignment(rawItem, {
+          layer: currentLayerNumber,
+          email: manualRecipient,
+          updatedBy: accounts[0]?.username || accounts[0]?.name || "SYSTEM",
+          updatedAt,
+          submittedAt: item.SubmittedAt,
+        })
+        : null;
+      if (handAssignment) patchBody.WorkflowAssignmentData = handAssignment;
       // Retrigger as paper/manual when the current recipient is the paper mailbox,
       // even if the stored status was never flagged (e.g. legacy submissions).
       const wantsManualPaper = shouldUseManualPaperForSender(currentLayer, recipient);
@@ -2231,12 +2244,12 @@ export default function ApprovalDashboard() {
       const refreshedRecipient = valueToText(refreshed[`L${currentLayerNumber}_Email`]) || recipient;
       setPendingItems((previous) => previous.map((current) =>
         getPendingItemKey(current) === itemKey
-          ? { ...current, WorkflowEmailLog: workflowEmailLog, WorkflowEmailSchedule: workflowEmailSchedule, ...(manualPdfUrl ? { PdfUrl: manualPdfUrl } : {}) }
+          ? { ...current, WorkflowEmailLog: workflowEmailLog, WorkflowEmailSchedule: workflowEmailSchedule, ...(manualPdfUrl ? { PdfUrl: manualPdfUrl } : {}), ...(handAssignment ? { WorkflowAssignmentData: handAssignment } : {}) }
           : current
       ));
       setSelectedItem((current) =>
         current && getPendingItemKey(current) === itemKey
-          ? { ...current, WorkflowEmailLog: workflowEmailLog, WorkflowEmailSchedule: workflowEmailSchedule, ...(manualPdfUrl ? { PdfUrl: manualPdfUrl } : {}) }
+          ? { ...current, WorkflowEmailLog: workflowEmailLog, WorkflowEmailSchedule: workflowEmailSchedule, ...(manualPdfUrl ? { PdfUrl: manualPdfUrl } : {}), ...(handAssignment ? { WorkflowAssignmentData: handAssignment } : {}) }
           : current
       );
       setCompletedLayers((previous) => ({
@@ -2406,7 +2419,8 @@ export default function ApprovalDashboard() {
         patchBody.WorkflowEmailSchedule = JSON.stringify(updateScheduledWorkflowEmailRecipient(
           rawItem.WorkflowEmailSchedule,
           layerNumber,
-          recipients[0] || routedPrimary,
+          // The whole delivery list, stand-ins included, as the server writes it.
+          (recipients.length ? recipients : [routedPrimary]).join(", "),
           updatedAt,
         ));
       }
@@ -2763,6 +2777,17 @@ export default function ApprovalDashboard() {
         scheduleActors,
         recipient,
       );
+      // As in "Send now or resend": a different address typed here is a hand
+      // reassignment, which the routing check then leaves alone.
+      const scheduleHandAssignment = manualEmailRecipient.trim()
+        ? typedAddressAssignment(rawItem, {
+          layer: currentLayerNumber,
+          email: recipient,
+          updatedBy: accounts[0]?.username || accounts[0]?.name || "SYSTEM",
+          updatedAt,
+          submittedAt: selectedItem.SubmittedAt,
+        })
+        : null;
       const schedule = setScheduledWorkflowEmail(rawItem.WorkflowEmailSchedule, {
         layer: currentLayerNumber,
         recipient: (scheduleRecipients.length ? scheduleRecipients : [recipient]).join("; "),
@@ -2782,15 +2807,20 @@ export default function ApprovalDashboard() {
           ...scheduleRecipientPatch,
           ...scheduleLinkPatch,
           WorkflowEmailSchedule: JSON.stringify(schedule),
+          ...(scheduleHandAssignment ? { WorkflowAssignmentData: scheduleHandAssignment } : {}),
         },
       );
       const serialized = JSON.stringify(schedule);
+      const scheduledFields = {
+        WorkflowEmailSchedule: serialized,
+        ...(scheduleHandAssignment ? { WorkflowAssignmentData: scheduleHandAssignment } : {}),
+      };
       setPendingItems((previous) => previous.map((current) =>
         getPendingItemKey(current) === itemKey
-          ? { ...current, WorkflowEmailSchedule: serialized }
+          ? { ...current, ...scheduledFields }
           : current
       ));
-      setSelectedItem((current) => current ? { ...current, WorkflowEmailSchedule: serialized } : current);
+      setSelectedItem((current) => current ? { ...current, ...scheduledFields } : current);
       setEmailNotice(`Evaluator email scheduled for ${formatDateTime(new Date(customEmailDate).toISOString())}.`);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not schedule the evaluator email.");
@@ -3244,6 +3274,7 @@ export default function ApprovalDashboard() {
         scheduleRaw: item.WorkflowEmailSchedule,
         logRaw: item.WorkflowEmailLog,
         assignmentRaw: item.WorkflowAssignmentData,
+        layerStatuses: item.layerStatuses,
       })))
     : [];
 

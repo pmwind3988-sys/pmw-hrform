@@ -15,7 +15,8 @@
  * them in step.
  */
 import { parseValidEmailList } from "./layerRecipients";
-import { isHeldRoutingOutcome, routingCheckOutcomeLabel } from "./routingCheckLabels";
+import { isNeedsRoutingStatus } from "./layerParkStatus";
+import { routingCheckOutcomeLabel } from "./routingCheckLabels";
 import { readRoutingChecks, type RoutingCheckOutcome } from "./workflowAssignmentData";
 import { getWorkflowEmailStatus } from "./workflowEmailLog";
 import type { ScheduledWorkflowEmail } from "./workflowEmailSchedule";
@@ -41,8 +42,10 @@ export interface EmailScheduleRow {
   isTest: boolean;
   scheduleRaw: unknown;
   logRaw: unknown;
-  /** The row's `WorkflowAssignmentData`; its routing-check log says whether a step is on hold. */
+  /** The row's `WorkflowAssignmentData`; its routing-check log says whether a check failed and will retry. */
   assignmentRaw?: unknown;
+  /** Raw L{n}_Status by step: a step parked as Needs Routing is on hold until HR names someone. */
+  layerStatuses?: Record<number, string>;
 }
 
 export interface EmailScheduleEntry {
@@ -154,11 +157,17 @@ export function compileEmailSchedule(rows: EmailScheduleRow[], now = new Date())
         });
         continue;
       }
-      // The step's latest automatic routing check decides: a hold means the
-      // daily run will not mail it until routing answers.
+      // A parked step is held until HR names someone (Reconfigure), whatever
+      // the log says; its status, not the log, decides. It cannot be sent from here.
+      if (isNeedsRoutingStatus(row.layerStatuses?.[layer])) {
+        entries.push({ ...base, state: "held", heldOutcome: "held-no-routing", selectable: false });
+        continue;
+      }
+      // A check that could not run holds the email until it retries next
+      // morning; the admin may retry it now with "Send selected now".
       const latestCheck = readRoutingChecks(row.assignmentRaw).filter((check) => check.layer === layer).pop();
-      if (latestCheck && isHeldRoutingOutcome(latestCheck.outcome)) {
-        entries.push({ ...base, state: "held", heldOutcome: latestCheck.outcome, selectable: false });
+      if (latestCheck?.outcome === "held-check-failed") {
+        entries.push({ ...base, state: "held", heldOutcome: latestCheck.outcome, selectable: true });
         continue;
       }
       if (attempts >= MAX_ATTEMPTS) {
