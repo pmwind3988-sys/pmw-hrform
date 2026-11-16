@@ -36,6 +36,8 @@ import type { TestRunStep } from "./_utils/testRunTrail.js";
 import { branchLayers, pickLayerByNumber } from "./_utils/layerPick.js";
 import { readReviewQueue } from "./_utils/reviewQueue.js";
 import { loadSubmissionLayerConfig, parseVersionPayload } from "./_utils/submissionLayerConfig.js";
+import { createPreSendCheckCache } from "./_utils/preSendRoutingCheck.js";
+import { gateFirstRequestEmail, type FirstRequestEmailGate } from "./_utils/preSendGate.js";
 
 // Re-exported: its tests and older callers import it from here.
 export { pickLayerByNumber };
@@ -1323,10 +1325,58 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       });
       // The next layer may fan out to several evaluators and/or a shared
       // mailbox; L{n}_Email holds only the primary actor.
-      const recipients = lateResolved ?? parseValidEmailList(
+      const savedRecipients = lateResolved ?? parseValidEmailList(
         responseItem.fields[`L${nextLayerNumber}_NotifyEmails`]
         || responseItem.fields[`L${nextLayerNumber}_Email`],
       );
+      const nextLayerType = notificationNextLayer.type === "evaluation" ? "evaluation" : "approval";
+      const appBaseUrl = getApplicationBaseUrl();
+      const formSlug = String(formConfig.Slug || "").trim();
+      const publicToken = String(notificationNextLayer.publicToken || "").trim();
+      const reviewLink = buildWorkflowReviewLink({
+        baseUrl: appBaseUrl,
+        layerType: String(notificationNextLayer.type || ""),
+        authMode: String(notificationNextLayer.authMode || ""),
+        publicToken,
+        formSlug,
+        responseItemId: safeResponseItemId,
+        layerNumber: nextLayerNumber,
+        // Written into `updates` above, so read from there rather than from the
+        // copy of the item fetched before the advance.
+        linkToken: String(updates[linkTokenField(nextLayerNumber)] || readLinkToken(responseItem.fields, nextLayerNumber)),
+      });
+      const scheduleConfig = notificationNextLayer.type === "evaluation"
+        ? notificationNextLayer.emailSchedule as WorkflowEmailScheduleConfig | undefined
+        : undefined;
+      // Before the next person is asked, a checked form's step is compared with
+      // routing (preSendGate.ts). The decision above is recorded whatever it
+      // says; at worst the request email waits.
+      const gate = await gateFirstRequestEmail(graphToken, {
+        params: {
+          formTitle,
+          itemId: String(responseItem.id),
+          layer: nextLayerNumber,
+          trigger: "step-advanced",
+          listTitle: responseListName,
+        },
+        cache: createPreSendCheckCache(graphToken),
+        rowFields: responseItem.fields,
+        recipients: savedRecipients,
+        primary: lateResolved?.[0] ?? responseItem.fields[`L${nextLayerNumber}_Email`],
+        deferred: !!scheduleConfig && scheduleConfig.mode !== "immediate",
+        retry: {
+          context: { listTitle: responseListName, responseItemId: responseItem.id, layer: nextLayerNumber, testRun },
+          details: {
+            layerType: nextLayerType,
+            totalLayers: activeLayers.length,
+            reviewLink,
+            submittedBy: String(responseItem.fields.SubmittedBy || "Public respondent"),
+          },
+        },
+        logScope: "api:evaluate",
+      }).catch((): FirstRequestEmailGate => ({ send: false }));
+      const recipients = gate.send ? gate.recipients : [];
+      const stepFields = gate.send ? gate.fields : responseItem.fields;
       const recipient = recipients.length === 1 ? recipients[0] : recipients;
       if (isTestRow(responseItem.fields) && !testRun) {
         // A test row with no usable redirect address. The alternative —
@@ -1339,28 +1389,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           layer: nextLayerNumber,
         });
       } else if (recipients.length > 0) {
-        const nextLayerType = notificationNextLayer.type === "evaluation" ? "evaluation" : "approval";
         const standInNote = await standInEmailNote(
           withTestRunStandInFor(createApprovalDirectoryReader(graphToken), responseItem.fields),
-          lateResolved?.[0] ?? responseItem.fields[`L${nextLayerNumber}_Email`],
+          gate.send ? gate.primary : undefined,
           recipients,
           nextLayerType,
         ).catch(() => undefined);
-        const appBaseUrl = getApplicationBaseUrl();
-        const formSlug = String(formConfig.Slug || "").trim();
-        const publicToken = String(notificationNextLayer.publicToken || "").trim();
-        const reviewLink = buildWorkflowReviewLink({
-          baseUrl: appBaseUrl,
-          layerType: String(notificationNextLayer.type || ""),
-          authMode: String(notificationNextLayer.authMode || ""),
-          publicToken,
-          formSlug,
-          responseItemId: safeResponseItemId,
-          layerNumber: nextLayerNumber,
-          // Written into `updates` above, so read from there rather than from the
-          // copy of the item fetched before the advance.
-          linkToken: String(updates[linkTokenField(nextLayerNumber)] || readLinkToken(responseItem.fields, nextLayerNumber)),
-        });
         try {
           const layerType = notificationNextLayer.type === "evaluation" ? "evaluation" : "approval";
           const totalLayerCount = activeLayers.length;
@@ -1369,7 +1403,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           // The subject names whoever the form says the request is about, so a
           // reviewer can tell two waiting requests apart from the inbox list.
           const applicantName = resolveApplicantName(responseItem.fields);
-          const nextStatus = responseItem.fields[`L${nextLayerNumber}_Status`];
+          const nextStatus = stepFields[`L${nextLayerNumber}_Status`];
           const manualPaper = isManualPaperLayerStatus(nextStatus);
           await scheduleOrDeliverWorkflowEmail(
             graphToken,
@@ -1423,9 +1457,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               layer: nextLayerNumber,
               testRun,
             },
-            notificationNextLayer.type === "evaluation"
-              ? notificationNextLayer.emailSchedule as WorkflowEmailScheduleConfig | undefined
-              : undefined,
+            scheduleConfig,
             {
               layer: nextLayerNumber,
               layerType,

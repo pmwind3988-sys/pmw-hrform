@@ -28,8 +28,8 @@ import {
 } from "./_utils/workflowDigest.js";
 import { REFERENCE_NO_FIELD } from "./_utils/referenceNumber.js";
 import { joinEmailList, parseValidEmailList } from "./_utils/layerRecipients.js";
-import { checkBeforeSend, createPreSendCheckCache, type PreSendCheckCache, type PreSendCheckResult } from "./_utils/preSendRoutingCheck.js";
-import { isRoutingCheckedForm } from "./_utils/routingCheckedForms.js";
+import { createPreSendCheckCache, type PreSendCheckCache } from "./_utils/preSendRoutingCheck.js";
+import { decideBeforeSend } from "./_utils/preSendGate.js";
 import { isManualPaperStatus, isNeedsRoutingStatus } from "./_utils/layerParkStatus.js";
 import type { RoutingCheckTrigger } from "./_utils/workflowAssignmentData.js";
 import { createApprovalDirectoryReader } from "./_utils/approvalDirectory.js";
@@ -78,8 +78,13 @@ function scheduledRecipients(recipient: string): string | string[] {
  *   switched on, a test run, or a step the check could not judge).
  * - `hold`: send nothing. A scheduled entry stays "scheduled", so the next run
  *   checks it again.
+ *
+ * The mapping itself is shared with the instant sends (`preSendGate.ts`); what
+ * is the run's own is that everything it sends is an action email, so a step
+ * the check could not judge is still held when it is parked, on paper, or has
+ * nobody to send to.
  */
-type PreSendDecision =
+type CronPreSendDecision =
   | { action: "send"; recipients?: string[]; fields?: Record<string, unknown>; corrected: boolean }
   | { action: "hold"; reason: string };
 
@@ -89,41 +94,22 @@ async function preSendDecision(
   params: { formTitle: string; itemId: string; layer: number; trigger: RoutingCheckTrigger },
   fields: Record<string, unknown>,
   callerRecipient: string,
-): Promise<PreSendDecision> {
-  // Unchecked forms and test runs never reach the check and run exactly as before.
-  if (!isRoutingCheckedForm(params.formTitle) || isTestRow(fields)) return { action: "send", corrected: false };
-  let result: PreSendCheckResult;
-  try {
-    result = await checkBeforeSend(token, { ...params, cache });
-  } catch (error) {
-    // The check reports its own failures; this is only for one that escapes.
-    logWarn("api:workflow-email-cron", "Routing check failed before send; holding the email", {
-      formTitle: params.formTitle,
-      itemId: params.itemId,
-      layer: params.layer,
-      errorMessage: error instanceof Error ? error.message : String(error),
-    });
-    return { action: "hold", reason: "The routing check could not be completed." };
+): Promise<CronPreSendDecision> {
+  const decision = await decideBeforeSend(token, cache, params, fields, "api:workflow-email-cron");
+  if (decision.action === "hold") return { action: "hold", reason: decision.reason };
+  if (decision.action === "send") {
+    return { action: "send", recipients: decision.recipients, fields: decision.fields, corrected: decision.corrected };
   }
-  if (result.hold) return { action: "hold", reason: result.reason || "The routing check held this email." };
-  if (result.outcome === "skipped") return { action: "send", corrected: false };
-  if (result.outcome === "not-checkable") {
-    const status = String(result.fields[`L${params.layer}_Status`] ?? "");
+  if (decision.notCheckable) {
+    const status = String(decision.notCheckable.fields[`L${params.layer}_Status`] ?? "");
     if (isNeedsRoutingStatus(status) || isManualPaperStatus(status)) {
       return { action: "hold", reason: "The step is waiting for routing or is handled on paper." };
     }
     if (parseValidEmailList(callerRecipient).length === 0) {
       return { action: "hold", reason: "The step has nobody to send to." };
     }
-    return { action: "send", corrected: false };
   }
-  if (result.recipients.length === 0) return { action: "hold", reason: "Routing gave nobody to send to." };
-  return {
-    action: "send",
-    recipients: result.recipients,
-    fields: result.fields,
-    corrected: result.outcome === "corrected",
-  };
+  return { action: "send", corrected: false };
 }
 
 /** A line of a daily summary: a due email, or a reminder for a step already emailed. */

@@ -70,6 +70,8 @@ import {
   type WorkflowEmailScheduleConfig,
 } from "./_utils/workflowEmail.js";
 import { expandDistributionList } from "./_utils/groupMembers.js";
+import { createPreSendCheckCache } from "./_utils/preSendRoutingCheck.js";
+import { gateFirstRequestEmail, type FirstRequestEmailGate } from "./_utils/preSendGate.js";
 import {
   joinEmailList,
   parseValidEmailList,
@@ -2251,21 +2253,50 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (firstLayer) {
       // The notification may fan out to several evaluators and/or a shared
       // mailbox; L{n}_Email is only the primary actor.
-      const recipients = parseValidEmailList(
+      const savedRecipients = parseValidEmailList(
         submissionBody[`L${firstLayer.layerNumber}_NotifyEmails`]
         || submissionBody[`L${firstLayer.layerNumber}_Email`],
       );
+      const appBaseUrl = getApplicationBaseUrl();
+      const formSlug = valueToText(formConfig.Slug);
+      const submittedBy = valueToText(submissionBody.SubmittedBy) || "Public respondent";
+      const totalLayers = parsedLayerConfig?.layers?.length ?? 1;
+      const reviewLink = buildWorkflowReviewLink({
+        baseUrl: appBaseUrl,
+        layerType: firstLayer.type,
+        authMode: firstLayer.authMode,
+        publicToken: firstLayer.publicToken,
+        formSlug,
+        responseItemId: parentId,
+        layerNumber: firstLayer.layerNumber,
+        linkToken: firstLayerLinkToken,
+      });
+      const firstEmailSchedule = firstLayer.type === "evaluation" ? firstLayer.emailSchedule : undefined;
+      // Before step 1 is asked, a checked form's step is compared with routing
+      // (preSendGate.ts). The submission is saved whatever it says; at worst
+      // the request email waits.
+      const gate = await gateFirstRequestEmail(token, {
+        params: { formTitle: listTitle, itemId: String(parentId), layer: firstLayer.layerNumber, trigger: "submission" },
+        cache: createPreSendCheckCache(token),
+        rowFields: submissionBody,
+        recipients: savedRecipients,
+        primary: submissionBody[`L${firstLayer.layerNumber}_Email`],
+        deferred: !!firstEmailSchedule && firstEmailSchedule.mode !== "immediate",
+        retry: {
+          context: { listTitle, responseItemId: parentId, layer: firstLayer.layerNumber, testRun: testRedirect },
+          details: { layerType: firstLayer.type, totalLayers, reviewLink, submittedBy },
+        },
+        logScope: "api:submit-form",
+      }).catch((): FirstRequestEmailGate => ({ send: false }));
+      const recipients = gate.send ? gate.recipients : [];
+      const stepFields = gate.send ? gate.fields : submissionBody;
       const recipient = recipients.length === 1 ? recipients[0] : recipients;
       if (recipients.length > 0) {
-        const appBaseUrl = getApplicationBaseUrl();
-        const formSlug = valueToText(formConfig.Slug);
         try {
-          const submittedBy = valueToText(submissionBody.SubmittedBy) || "Public respondent";
           // Whose request this is, per the form's own name field — the subject
           // line names the applicant, not the mailbox that pressed submit.
           const applicantName = resolveApplicantName(submissionBody);
-          const totalLayers = parsedLayerConfig?.layers?.length ?? 1;
-          if (isNeedsRoutingLayerStatus(submissionBody[`L${firstLayer.layerNumber}_Status`])) {
+          if (isNeedsRoutingLayerStatus(stepFields[`L${firstLayer.layerNumber}_Status`])) {
             // Parked: there is nobody to action it, so the notice says so
             // rather than handing out a link the access check would refuse.
             await scheduleOrDeliverWorkflowEmail(
@@ -2292,7 +2323,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 submittedBy,
               },
             );
-          } else if (isManualPaperLayerStatus(submissionBody[`L${firstLayer.layerNumber}_Status`])) {
+          } else if (isManualPaperLayerStatus(stepFields[`L${firstLayer.layerNumber}_Status`])) {
             await sendManualPaperWorkflowEmail(token, {
               listTitle,
               responseItemId: parentId,
@@ -2305,20 +2336,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
               testRun: testRedirect,
             });
           } else {
-            const reviewLink = buildWorkflowReviewLink({
-              baseUrl: appBaseUrl,
-              layerType: firstLayer.type,
-              authMode: firstLayer.authMode,
-              publicToken: firstLayer.publicToken,
-              formSlug,
-              responseItemId: parentId,
-              layerNumber: firstLayer.layerNumber,
-              linkToken: firstLayerLinkToken,
-            });
             // Says who on the email is standing in for the step's own person.
             const standInNote = await standInEmailNote(
               withTestRunStandInFor(createApprovalDirectoryReader(token), submissionBody),
-              submissionBody[`L${firstLayer.layerNumber}_Email`],
+              gate.send ? gate.primary : undefined,
               recipients,
               firstLayer.type,
             ).catch(() => undefined);
@@ -2345,7 +2366,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 layer: firstLayer.layerNumber,
                 testRun: testRedirect,
               },
-              firstLayer.type === "evaluation" ? firstLayer.emailSchedule : undefined,
+              firstEmailSchedule,
               {
                 layer: firstLayer.layerNumber,
                 layerType: firstLayer.type,
