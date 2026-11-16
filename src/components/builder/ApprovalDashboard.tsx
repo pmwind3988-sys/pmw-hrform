@@ -79,7 +79,7 @@ import {
   setScheduledWorkflowEmail,
   updateScheduledWorkflowEmailRecipient,
 } from "../../utils/workflowEmailSchedule";
-import { getWorkflowAssignment, setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentData";
+import { getWorkflowAssignment, readRoutingChecks, setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentData";
 import {
   inspectLayerRouting as inspectSharedLayerRouting,
   type InspectableLayer,
@@ -2315,6 +2315,15 @@ export default function ApprovalDashboard() {
     try {
       const itemUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(selectedItem.Title)}')/items(${selectedItem.Id})`;
       const rawItem = await spGet(token, itemUrl) as Record<string, unknown>;
+      // The automatic-checks list reads the row's log, so show the freshly read one.
+      const freshAssignments = valueToText(rawItem.WorkflowAssignmentData);
+      const checkedKey = getPendingItemKey(selectedItem);
+      const withFreshLog = (current: PendingItem): PendingItem => getPendingItemKey(current) === checkedKey
+        && freshAssignments !== (current.WorkflowAssignmentData || "")
+        ? { ...current, WorkflowAssignmentData: freshAssignments }
+        : current;
+      setPendingItems((previous) => previous.map(withFreshLog));
+      setSelectedItem((current) => current ? withFreshLog(current) : current);
       if (isTerminalWorkflowStatus(rawItem.FormStatus || rawItem.Status)) {
         setRoutingVerdicts([]);
         return;
@@ -3234,6 +3243,7 @@ export default function ApprovalDashboard() {
         isTest: isTestRow(item as unknown as Record<string, unknown>),
         scheduleRaw: item.WorkflowEmailSchedule,
         logRaw: item.WorkflowEmailLog,
+        assignmentRaw: item.WorkflowAssignmentData,
       })))
     : [];
 
@@ -4036,6 +4046,9 @@ export default function ApprovalDashboard() {
                       fixingLayer={routingFixingLayer}
                       onCheck={() => void handleCheckRouting()}
                       onFix={(layerNumber) => void handleFixRouting(layerNumber)}
+                      autoChecks={readRoutingChecks(selectedItem.WorkflowAssignmentData)}
+                      layerTitles={Object.fromEntries(selectedActiveLayers.map((layer) => [layer.layerNumber, layer.title || ""]))}
+                      formatTime={formatDateTime}
                     />
                   )}
                   {isSuperuser && currentLayerConfig && getItemStatus(selectedItem) === "pending" && (

@@ -15,6 +15,8 @@
  * them in step.
  */
 import { parseValidEmailList } from "./layerRecipients";
+import { isHeldRoutingOutcome, routingCheckOutcomeLabel } from "./routingCheckLabels";
+import { readRoutingChecks, type RoutingCheckOutcome } from "./workflowAssignmentData";
 import { getWorkflowEmailStatus } from "./workflowEmailLog";
 import type { ScheduledWorkflowEmail } from "./workflowEmailSchedule";
 
@@ -22,6 +24,7 @@ import type { ScheduledWorkflowEmail } from "./workflowEmailSchedule";
 const MAX_ATTEMPTS = 5;
 
 export type EmailScheduleState =
+  | "held"
   | "next-summary"
   | "next-alone"
   | "later"
@@ -38,6 +41,8 @@ export interface EmailScheduleRow {
   isTest: boolean;
   scheduleRaw: unknown;
   logRaw: unknown;
+  /** The row's `WorkflowAssignmentData`; its routing-check log says whether a step is on hold. */
+  assignmentRaw?: unknown;
 }
 
 export interface EmailScheduleEntry {
@@ -56,6 +61,8 @@ export interface EmailScheduleEntry {
   /** For a summary: how many requests it carries (or carried). */
   summarySize?: number;
   sentAt?: string;
+  /** For state "held": the routing check that is holding this email back. */
+  heldOutcome?: RoutingCheckOutcome;
   attempts: number;
   /** Can be picked for "Send selected now". */
   selectable: boolean;
@@ -147,6 +154,13 @@ export function compileEmailSchedule(rows: EmailScheduleRow[], now = new Date())
         });
         continue;
       }
+      // The step's latest automatic routing check decides: a hold means the
+      // daily run will not mail it until routing answers.
+      const latestCheck = readRoutingChecks(row.assignmentRaw).filter((check) => check.layer === layer).pop();
+      if (latestCheck && isHeldRoutingOutcome(latestCheck.outcome)) {
+        entries.push({ ...base, state: "held", heldOutcome: latestCheck.outcome, selectable: false });
+        continue;
+      }
       if (attempts >= MAX_ATTEMPTS) {
         entries.push({ ...base, state: "stopped", selectable: true });
         continue;
@@ -178,7 +192,7 @@ export function compileEmailSchedule(rows: EmailScheduleRow[], now = new Date())
   }
 
   const order: Record<EmailScheduleState, number> = {
-    failed: 0, stopped: 1, "next-summary": 2, "next-alone": 3, later: 4, "sent-summary": 5, "sent-alone": 6,
+    held: 0, failed: 1, stopped: 2, "next-summary": 3, "next-alone": 4, later: 5, "sent-summary": 6, "sent-alone": 7,
   };
   return entries.sort((a, b) =>
     order[a.state] - order[b.state]
@@ -192,6 +206,8 @@ export function compileEmailSchedule(rows: EmailScheduleRow[], now = new Date())
 /** What the admin reads in the Status column. */
 export function emailScheduleLabel(entry: EmailScheduleEntry): string {
   switch (entry.state) {
+    case "held":
+      return entry.heldOutcome ? routingCheckOutcomeLabel(entry.heldOutcome) : "On hold";
     case "next-summary":
       return `${entry.held ? "Held for" : "In"} next summary · ${entry.summarySize} requests`;
     case "next-alone":

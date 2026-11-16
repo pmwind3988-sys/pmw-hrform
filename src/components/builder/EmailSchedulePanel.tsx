@@ -17,7 +17,7 @@ type ViewFilter = "upcoming" | "attention" | "next" | "later" | "sent" | "all";
 
 const VIEW_MATCHES: Record<ViewFilter, (entry: EmailScheduleEntry) => boolean> = {
   upcoming: (entry) => isUpcoming(entry),
-  attention: (entry) => entry.state === "failed" || entry.state === "stopped",
+  attention: (entry) => entry.state === "held" || entry.state === "failed" || entry.state === "stopped",
   next: (entry) => entry.state === "next-summary" || entry.state === "next-alone",
   later: (entry) => entry.state === "later" && !isUpcoming(entry),
   sent: (entry) => entry.state === "sent-summary" || entry.state === "sent-alone",
@@ -34,6 +34,7 @@ const VIEW_LABELS: Record<ViewFilter, string> = {
 };
 
 const STATE_TONE: Record<EmailScheduleState, { bg: string; fg: string }> = {
+  held: { bg: editorial.errorSoft, fg: editorial.error },
   failed: { bg: editorial.errorSoft, fg: editorial.error },
   stopped: { bg: editorial.errorSoft, fg: editorial.error },
   "next-summary": { bg: editorial.sky, fg: editorial.navyDeep },
@@ -154,6 +155,7 @@ export default function EmailSchedulePanel({
         ? `Sent ${formatWhen(entry.sentAt)}`
         : entry.state === "later" ? formatWhen(entry.dueAt)
           : entry.state === "stopped" ? `${entry.attempts} attempts`
+            : entry.state === "held" ? "Not sent yet"
             : `Next run · ${formatWhen(nextDigestRunAt().toISOString())}`,
     },
     {
