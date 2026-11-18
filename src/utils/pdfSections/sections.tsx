@@ -24,6 +24,7 @@ import type { PdfSectionContext } from "./context";
 import type { PdfLayerResult } from "../FormPdfDocument";
 import { onBehalfOfLine, signOffLabel, signOffName, signOffPosition, signOffVerdictFromStatus } from "../signOff";
 import type { TemplateFooter } from "../pdfTemplate/types";
+import { correctionsFromFields } from "../submissionCorrections";
 
 export { C, S };
 
@@ -96,6 +97,15 @@ export function StatusBadgeSection(_props: { ctx: PdfSectionContext }) {
   return null;
 }
 
+/** "Corrected by submitter", only on a submission its submitter changed before any decision. */
+function correctionCell(ctx: PdfSectionContext): { label: string; value: string }[] {
+  const corrections = ctx.data.meta.corrections ?? correctionsFromFields(ctx.data.responseData);
+  if (corrections.length === 0) return [];
+  const last = corrections[corrections.length - 1];
+  const times = corrections.length === 1 ? "" : ` (${corrections.length} times)`;
+  return [{ label: "Corrected by Submitter", value: `${fmtDate(last.at)}${times}` }];
+}
+
 export function SubmissionMetaSection({ ctx }: { ctx: PdfSectionContext }) {
   const { meta } = ctx.data;
   // A reference leads: on a printed copy it is what gets read back by phone.
@@ -104,6 +114,7 @@ export function SubmissionMetaSection({ ctx }: { ctx: PdfSectionContext }) {
     { label: "Submitted By", value: meta.submittedBy || "—" },
     { label: "Date Submitted", value: fmtDate(meta.submittedAt) },
     ...(ctx.selectedCompany ? [{ label: "Company", value: ctx.selectedCompany }] : []),
+    ...correctionCell(ctx),
   ];
   return (
     <View style={S.infoGrid}>

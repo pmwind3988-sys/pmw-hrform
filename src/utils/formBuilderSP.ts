@@ -1128,6 +1128,48 @@ export async function createSpList(
   return r.status === 204 ? {} : r.json().catch(() => ({}));
 }
 
+/**
+ * Versions SharePoint keeps of each row on a list that holds records. A
+ * response row is rewritten many times after it is sent (every step, every
+ * email, every daily routing check), so SharePoint's default of 50 would push
+ * the row as first submitted out of its own history within months.
+ */
+export const RECORD_VERSION_LIMIT = 500;
+
+export interface ListVersioning {
+  enabled: boolean;
+  limit: number;
+}
+
+/** Whether a list keeps a row's earlier versions, and how many. */
+export async function readListVersioning(token: string, listTitle: string): Promise<ListVersioning> {
+  const data = await spGet(
+    token,
+    `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')?$select=EnableVersioning,MajorVersionLimit`,
+  ) as { EnableVersioning?: boolean; MajorVersionLimit?: number };
+  return { enabled: data.EnableVersioning === true, limit: Number(data.MajorVersionLimit) || 0 };
+}
+
+export function versioningIsEnough(versioning: ListVersioning): boolean {
+  return versioning.enabled && versioning.limit >= RECORD_VERSION_LIMIT;
+}
+
+/**
+ * Turns version history on for a list, keeping at least
+ * `RECORD_VERSION_LIMIT` versions, so a change made straight in SharePoint
+ * (outside the app) still leaves the earlier value behind. Never lowers a
+ * larger limit someone set by hand.
+ */
+export async function ensureListVersioning(token: string, listTitle: string): Promise<"already" | "turned-on"> {
+  const current = await readListVersioning(token, listTitle);
+  if (versioningIsEnough(current)) return "already";
+  await spPatch(token, `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')`, {
+    EnableVersioning: true,
+    MajorVersionLimit: Math.max(current.limit, RECORD_VERSION_LIMIT),
+  });
+  return "turned-on";
+}
+
 export async function listExists(
   token: string,
   listTitle: string
@@ -2318,6 +2360,16 @@ function logEnsuredColumns(
  * Fetches existing columns once, creates only missing fields, and keeps
  * matrix child-list schemas in sync when matrix columns change later.
  */
+/** Publishing turns version history on; a failure is reported, never fatal. */
+async function logListVersioning(token: string, listTitle: string, onLog: (msg: string, type: string) => void): Promise<void> {
+  try {
+    const result = await ensureListVersioning(token, listTitle);
+    if (result === "turned-on") onLog(`Version history turned on for "${listTitle}" (keeps ${RECORD_VERSION_LIMIT} versions)`, 'ok');
+  } catch (e) {
+    onLog(`Could not turn on version history for "${listTitle}": ${(e as Error).message}`, 'warn');
+  }
+}
+
 export async function provisionFormList(
   token: string,
   listTitle: string,
@@ -2334,6 +2386,8 @@ export async function provisionFormList(
   } else {
     onLog('List exists', 'ok');
   }
+
+  await logListVersioning(token, listTitle, onLog);
 
   const systemColumns = responseSystemColumnSpecs(options);
   const systemResult = await ensureColumns(token, listTitle, systemColumns);
@@ -2352,7 +2406,8 @@ export async function provisionFormList(
 
   for (const matrix of matrixFields) {
     try {
-      await ensureMatrixChildList(token, formTitle, matrix.name, matrix.columns, onLog);
+      const child = await ensureMatrixChildList(token, formTitle, matrix.name, matrix.columns, onLog);
+      if (child) await logListVersioning(token, child.listName, onLog);
     } catch (e) {
       onLog(`  Matrix child list for "${matrix.name}": ${(e as Error).message}`, 'warn');
     }

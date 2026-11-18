@@ -38,6 +38,7 @@ import { readReviewQueue } from "./_utils/reviewQueue.js";
 import { loadSubmissionLayerConfig, parseVersionPayload } from "./_utils/submissionLayerConfig.js";
 import { createPreSendCheckCache } from "./_utils/preSendRoutingCheck.js";
 import { gateFirstRequestEmail, type FirstRequestEmailGate } from "./_utils/preSendGate.js";
+import { readSubmissionCorrections } from "./_utils/workflowAssignmentData.js";
 
 // Re-exported: its tests and older callers import it from here.
 export { pickLayerByNumber };
@@ -83,7 +84,7 @@ function rejectedAtLayerStatus(layerNumber: number): string {
 
 const SYSTEM_FIELDS = new Set([
   "id", "Id", "Title", "SubmittedBy", "SubmittedAt", "Status", "CurrentApprovalLayer",
-  "FormVersion", "PublishKey", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule",
+  "FormVersion", "PublishKey", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowAssignmentData", "SubmissionCorrections", "WorkflowEmailLog", "WorkflowEmailSchedule",
   "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
   "Author", "Editor", "Created", "Modified", "ContentType", "PermMask",
   "SelectedBranch", REFERENCE_NO_FIELD,
@@ -763,6 +764,12 @@ async function handleGet(req: ApiRequest, res: ApiResponse) {
     for (const key of [REFERENCE_NO_FIELD, "Title", "SubmittedBy", "SubmittedAt", "FormVersion", "PublishKey", "FormID", "Status", "FormStatus", "CurrentLayer", "CurrentApprovalLayer"]) {
       if (allFields[key] !== undefined) visibleFields[key] = allFields[key];
     }
+
+    // A submitter's corrections, made before any step was decided, so the
+    // reviewer and the PDF can say the answers were changed. Only this part of
+    // WorkflowAssignmentData: the rest holds routing logs with other addresses.
+    const corrections = readSubmissionCorrections(allFields.WorkflowAssignmentData);
+    if (corrections.length > 0) visibleFields.SubmissionCorrections = JSON.stringify(corrections);
 
     // Include submitted form fields, but not workflow/system columns.
     for (const [key, value] of Object.entries(allFields)) {

@@ -15,6 +15,8 @@ import "../native/native-form.css";
 import { testRunFromTicket } from "../utils/testRun";
 import { getLatestFormBySlug, getFormVersion, spGet, spPost, spPatch, spPatchUrlField, triggerApprovalNotification, getSharePointChoices, getFilteredListChoices, getScopedListRows, uploadSignatureImage, getFormConfigByTitle, writeMatrixChildItems, ensureMatrixChildList, readMatrixChildItems, uploadFileToDocLib, ensureDocLibrary, ensurePdpaColumns, ensureWorkflowColumns, toAbsoluteSharePointUrl, getSharePointColumnKeyResolver, spDelete } from "../utils/formBuilderSP";
 import { EDIT_PARAM, EDIT_REFUSAL_MESSAGE, answersFromItem, changedAnswerNames, editRefusal, parseEditTarget, type EditRefusal } from "../utils/submissionEdit";
+import { buildCorrectionEntry } from "../utils/submissionCorrections";
+import { recordSubmissionCorrection } from "../utils/workflowAssignmentData";
 import { matrixChildListName } from "../utils/matrixChildRows";
 import { SharePointHttpError, createSpClient, isSharePointAccessDeniedError } from "../utils/sharepointClient";
 import { SP_STATIC } from "../utils/spConfig";
@@ -413,6 +415,32 @@ async function saveSubmissionEdit(opts: {
     for (const key of [name, `${name}_Response`, `${name}_Json`]) if (key in full) patch[key] = full[key];
   }
 
+  const resolveColumnKey = await getSharePointColumnKeyResolver(token, listTitle);
+  const mapped = mapBodyToSharePointColumnKeys(patch, resolveColumnKey, listTitle);
+
+  // The record of this correction (who, when, each answer before and after)
+  // goes in the same write as the new answers, so an answer can never change
+  // without a trace. A list that cannot hold the record refuses the save.
+  const correction = buildCorrectionEntry({
+    surveyJson,
+    before: target.before,
+    after: raw,
+    changed,
+    by: opts.viewerEmail,
+    at: new Date().toISOString(),
+    uploaded: new Map(urlFieldPatches.map((upload) => [upload.fieldName, upload.url])),
+  });
+  if (correction) {
+    const recordKey = resolveColumnKey("WorkflowAssignmentData");
+    if (!recordKey) {
+      throw new Error(`"${listTitle}" cannot keep a record of corrections yet, so nothing was changed. Ask HR to republish the form, then try again.`);
+    }
+    mapped[recordKey] = JSON.stringify(recordSubmissionCorrection(item[recordKey] ?? item.WorkflowAssignmentData, correction));
+  }
+  if (Object.keys(mapped).length > 0) await spPatch(token, itemUrl, mapped);
+
+  // Old table rows go only after the new answers and their record are saved:
+  // the table's full copy (`_Json`) is already in that write.
   const tables = getDynamicMatrixFields(surveyJson).filter((table) => changed.has(table.name));
   for (const table of tables) {
     const childUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(matrixChildListName(listTitle, table.name))}')`;
@@ -421,10 +449,6 @@ async function saveSubmissionEdit(opts: {
       if (typeof row.Id === "number") await spDelete(token, `${childUrl}/items(${row.Id})`);
     }
   }
-
-  const resolveColumnKey = await getSharePointColumnKeyResolver(token, listTitle);
-  const mapped = mapBodyToSharePointColumnKeys(patch, resolveColumnKey, listTitle);
-  if (Object.keys(mapped).length > 0) await spPatch(token, itemUrl, mapped);
 
   for (const upload of urlFieldPatches) {
     const key = resolveColumnKey(upload.fieldName);

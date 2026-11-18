@@ -24,6 +24,7 @@ import { TemplateBody } from "./pdfTemplate/renderTemplate";
 import type { PdfTemplate } from "./pdfTemplate/types";
 import type { DocumentControlHeader, PdfConfig } from "../types";
 import PaperFormDocument from "./paperPdf/PaperFormDocument";
+import type { SubmissionCorrectionEntry } from "./workflowAssignmentData";
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export interface PdfFormData {
@@ -41,6 +42,12 @@ export interface PdfFormData {
     formStatus?: string;
     /** `[PREFIX-]DDMMYY-NNNN`, when the form issues reference numbers. */
     referenceNo?: string;
+    /**
+     * The submitter's own corrections before any step was decided. Filled by
+     * `generatePdfBlob` from the item itself; absent means read them from
+     * `responseData` (`correctionsFromFields`).
+     */
+    corrections?: SubmissionCorrectionEntry[];
   };
   /** Layer results: each entry is one layer's data */
   layerResults?: PdfLayerResult[];

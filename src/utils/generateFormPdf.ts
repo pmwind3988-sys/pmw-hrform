@@ -4,11 +4,13 @@
  */
 import { pdf } from "@react-pdf/renderer";
 import FormPdfDocument, { type PdfFormData, type PdfLayerResult } from "./FormPdfDocument";
-import { uploadFormPdf, deleteFormPdf, spPatch, ensurePdfUrlColumn, readMatrixChildItems } from "./formBuilderSP";
+import { uploadFormPdf, deleteFormPdf, spGet, spPatch, ensurePdfUrlColumn, readMatrixChildItems } from "./formBuilderSP";
 import type { MatrixColumnDef } from "./formBuilderSP";
 import { fetchWithAuthRecovery } from "./authRecovery";
 import { readOnBehalfOf } from "./layerRecipients";
 import { questionsMatchingAnswers } from "./evaluationQuestionMatch";
+import { correctionsFromFields } from "./submissionCorrections";
+import { readSubmissionCorrections } from "./workflowAssignmentData";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
 
@@ -496,6 +498,21 @@ export async function generatePdfBlob(token: string, responseItemId: number, dat
   }
 
   await hydratePdfImages(token, data);
+
+  // A submission its submitter corrected says so on paper. Read from the item
+  // itself, because callers pass the answers without the workflow columns.
+  if (!data.meta.corrections) {
+    let corrections = correctionsFromFields(data.responseData);
+    try {
+      const listUrl = `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(data.meta.formTitle)}')`;
+      const item = await spGet(token, `${listUrl}/items(${responseItemId})?$select=WorkflowAssignmentData`) as Record<string, unknown>;
+      const stored = readSubmissionCorrections(item?.WorkflowAssignmentData);
+      if (stored.length > 0) corrections = stored;
+    } catch {
+      // Older list without the column, or no read access: the answers' own copy stands.
+    }
+    data.meta = { ...data.meta, corrections };
+  }
 
   return Promise.race([
     pdf(FormPdfDocument(data)).toBlob(),

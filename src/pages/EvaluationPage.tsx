@@ -58,6 +58,7 @@ import {
   signOffVerdictForLayer,
   signOffVerdictFromStatus,
 } from "../utils/signOff";
+import { correctedQuestionLabels, correctionNotice, correctionsFromFields } from "../utils/submissionCorrections";
 import { readOnBehalfOf, type OnBehalfOfRecord } from "../utils/layerRecipients";
 
 const SP_SITE_URL = (import.meta.env.VITE_SP_SITE_URL || "").replace(/\/$/, "");
@@ -116,7 +117,7 @@ async function loadPdfAndGenerate(token: string, listTitle: string, responseItem
 
     const SYSTEM_FIELDS = new Set([
       'Id','Title','SubmittedBy','SubmittedAt','Status','CurrentApprovalLayer',
-      'FormVersion','PublishKey','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowAssignmentData','WorkflowEmailLog','WorkflowEmailSchedule',
+      'FormVersion','PublishKey','FormID','RawJSON','CurrentLayer','FormStatus','EvaluationData','WorkflowAssignmentData','SubmissionCorrections','WorkflowEmailLog','WorkflowEmailSchedule',
       'PDPAConsent','PDPANoticeVersion','PDPAConsentAt','RetentionUntil',
       'Author','Editor','Created','Modified','ContentType','PermMask',
       'L1_Status','L1_Email','L1_SignedAt','L1_Rejection','L1_Signature',
@@ -179,7 +180,7 @@ function valueToText(value: unknown): string {
 
 const SYSTEM_FIELDS = new Set([
   "Id", "Title", "SubmittedBy", "SubmittedAt", "Status", "CurrentApprovalLayer",
-  "FormVersion", "PublishKey", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowAssignmentData", "WorkflowEmailLog", "WorkflowEmailSchedule",
+  "FormVersion", "PublishKey", "FormID", "RawJSON", "CurrentLayer", "FormStatus", "EvaluationData", "WorkflowAssignmentData", "SubmissionCorrections", "WorkflowEmailLog", "WorkflowEmailSchedule",
   "PDPAConsent", "PDPANoticeVersion", "PDPAConsentAt", "RetentionUntil",
   "Author", "Editor", "Created", "Modified", "ContentType", "PermMask",
   "SelectedBranch",
@@ -1081,6 +1082,9 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
   const submitterLabel = submittedBy.toUpperCase() === "GUEST" ? "Guest (submitted via public link)" : submittedBy;
   const submittedParts = reviewerDateParts(responseData?.SubmittedAt);
   const submittedAtText = submittedParts ? `${submittedParts.date} at ${submittedParts.time}` : "";
+  const corrections = correctionsFromFields(responseData);
+  const correctionLine = correctionNotice(corrections, formatReviewerDateTime);
+  const correctedLabels = correctedQuestionLabels(corrections);
   const previewData = getSubmissionPreviewData(responseData);
   const previewSections = collectPreviewSections(surveyJson, previewData);
   const answerCount = previewSections.length > 0 ? countPreviewAnswers(previewSections) : Object.keys(previewData).length;
@@ -1223,6 +1227,11 @@ export default function EvaluationPage({ embedded }: { embedded?: EmbeddedEvalua
             <p className="rv-lead" style={{ margin: 0, color: R.muted }}>
               {submittedBy ? <>From <strong style={{ color: R.ink, fontWeight: 600 }}>{submitterLabel}</strong>{submittedAtText ? ", " : ""}</> : null}
               {submittedAtText ? `submitted ${submittedAtText}` : null}
+            </p>
+          )}
+          {correctionLine && (
+            <p className="rv-lead" style={{ margin: 0, color: R.ink, fontSize: 14, lineHeight: 1.6 }}>
+              {correctionLine}{correctedLabels.length > 0 ? ` Changed: ${correctedLabels.join(", ")}.` : ""}
             </p>
           )}
           {showHeaderDescription && <p className="rv-lead" style={{ margin: 0, color: R.muted }}>{layerDescription}</p>}

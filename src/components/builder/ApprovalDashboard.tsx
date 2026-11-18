@@ -79,7 +79,10 @@ import {
   setScheduledWorkflowEmail,
   updateScheduledWorkflowEmailRecipient,
 } from "../../utils/workflowEmailSchedule";
-import { getWorkflowAssignment, readRoutingChecks, setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentData";
+import { getWorkflowAssignment, readRoutingChecks, readSubmissionCorrections, setWorkflowAssignmentOverride } from "../../utils/workflowAssignmentData";
+import { auditExportHeader, auditExportRow, stepCount } from "../../utils/submissionAuditExport";
+import { malaysiaParts } from "../../utils/paperPdf/needsSchedule";
+import SubmissionCorrectionsPanel from "./SubmissionCorrectionsPanel";
 import { typedAddressAssignment } from "../../utils/typedAddressAssignment";
 import {
   inspectLayerRouting as inspectSharedLayerRouting,
@@ -127,6 +130,7 @@ import SapFormTree, { type SapFormTreeEntry } from "../sap/SapFormTree";
 import SapViewSwitch from "../sap/SapViewSwitch";
 import EmailSchedulePanel from "./EmailSchedulePanel";
 import RoutingChecksPanel from "./RoutingChecksPanel";
+import RecordKeepingPanel from "./RecordKeepingPanel";
 import { compileRoutingChecks, type RoutingCheckLine } from "../../utils/routingCheckOverview";
 import {
   compileEmailSchedule,
@@ -821,6 +825,7 @@ export default function ApprovalDashboard() {
   /** The compiled email schedule, shown in place of the three panes. */
   const [showEmailSchedule, setShowEmailSchedule] = useState(false);
   const [showRoutingChecks, setShowRoutingChecks] = useState(false);
+  const [showRecordKeeping, setShowRecordKeeping] = useState(false);
   const [adminChecked, setAdminChecked] = useState(false);
   const [itemCurrentTypes, setItemCurrentTypes] = useState<Record<string, "approval" | "evaluation">>({});
   const formLayerConfigsRef = useRef<Record<string, LayerConfigSource>>({});
@@ -3012,18 +3017,49 @@ export default function ApprovalDashboard() {
     }
   };
 
-  const exportChecked = () => {
-    const header = ["Form", "Item ID", "Submitted by", "Submitted at", "Status", "Current layer", "Form version"];
-    const lines = [csvRow(header), ...checkedItems.map((item) => csvRow([
-      item.Title,
-      item.Id,
-      item.SubmittedBy || "",
-      item.SubmittedAt || "",
-      item.FormStatus || item.Status || "",
-      Math.max(item.CurrentLayer || 0, item.CurrentApprovalLayer || 0) || "",
-      item.FormVersion || "",
-    ]))];
+  // The audit export: each ticked submission's whole record (every step's
+  // decision, consent, corrections), read fresh because the list holds only a
+  // summary. A row that cannot be read is still exported from that summary.
+  const exportChecked = async () => {
+    if (!token || checkedItems.length === 0) return;
+    const targets = [...checkedItems];
+    const full: Record<string, unknown>[] = new Array(targets.length);
+    const unread: string[] = [];
+    let done = 0;
+    let next = 0;
+    setBulkProgress({ label: "Preparing export", done: 0, total: targets.length });
+    const worker = async () => {
+      while (next < targets.length) {
+        const index = next;
+        next += 1;
+        const item = targets[index];
+        try {
+          const raw = await spGet(
+            token,
+            `${SP_SITE_URL}/_api/web/lists/getbytitle('${encodeURIComponent(item.Title)}')/items(${item.Id})`,
+          ) as Record<string, unknown>;
+          full[index] = { ...raw, Title: item.Title, Id: item.Id };
+        } catch {
+          unread.push(`${item.Title} #${item.Id}`);
+          full[index] = { ...item } as unknown as Record<string, unknown>;
+        }
+        done += 1;
+        setBulkProgress({ label: "Preparing export", done, total: targets.length });
+      }
+    };
+    // A few at a time: enough to be quick, few enough not to be throttled.
+    await Promise.all(Array.from({ length: Math.min(4, targets.length) }, worker));
+    setBulkProgress(null);
+    const steps = Math.max(0, ...full.map(stepCount));
+    const malaysiaTime = (iso: string) => {
+      const parts = malaysiaParts(iso);
+      return parts ? `${parts.date} ${parts.time}`.trim() : iso;
+    };
+    const lines = [csvRow(auditExportHeader(steps)), ...full.map((item) => csvRow(auditExportRow(item, steps, malaysiaTime)))];
     downloadCsv(lines.join("\r\n"), `submissions-${new Date().toISOString().slice(0, 10)}.csv`);
+    if (unread.length > 0) {
+      setError(`Exported, but ${unread.length} could not be read in full and carry only their summary: ${unread.slice(0, 5).join(", ")}${unread.length > 5 ? "…" : ""}.`);
+    }
   };
 
   // Handle approve
@@ -3373,7 +3409,7 @@ export default function ApprovalDashboard() {
                   variant={showEmailSchedule ? "contained" : "outlined"}
                   size="small"
                   aria-pressed={showEmailSchedule}
-                  onClick={() => { setShowRoutingChecks(false); setShowEmailSchedule((current) => !current); }}
+                  onClick={() => { setShowRoutingChecks(false); setShowRecordKeeping(false); setShowEmailSchedule((current) => !current); }}
                   sx={{ textTransform: "none", fontWeight: 700, borderRadius: `${si.radius}px` }}
                 >
                   {showEmailSchedule ? "Back to submissions" : "Email schedule"}
@@ -3384,10 +3420,21 @@ export default function ApprovalDashboard() {
                   variant={showRoutingChecks ? "contained" : "outlined"}
                   size="small"
                   aria-pressed={showRoutingChecks}
-                  onClick={() => { setShowEmailSchedule(false); setShowRoutingChecks((current) => !current); }}
+                  onClick={() => { setShowEmailSchedule(false); setShowRecordKeeping(false); setShowRoutingChecks((current) => !current); }}
                   sx={{ textTransform: "none", fontWeight: 700, borderRadius: `${si.radius}px` }}
                 >
                   {showRoutingChecks ? "Back to submissions" : "Routing checks"}
+                </Button>
+              )}
+              {isSuperuser && (
+                <Button
+                  variant={showRecordKeeping ? "contained" : "outlined"}
+                  size="small"
+                  aria-pressed={showRecordKeeping}
+                  onClick={() => { setShowEmailSchedule(false); setShowRoutingChecks(false); setShowRecordKeeping((current) => !current); }}
+                  sx={{ textTransform: "none", fontWeight: 700, borderRadius: `${si.radius}px` }}
+                >
+                  {showRecordKeeping ? "Back to submissions" : "Record keeping"}
                 </Button>
               )}
               <SapViewSwitch current="all" />
@@ -3582,12 +3629,13 @@ export default function ApprovalDashboard() {
           />
         )}
 
+        {showRecordKeeping && token && <RecordKeepingPanel token={token} />}
         {showRoutingChecks && (
           <RoutingChecksPanel lines={routingCheckLines} onOpen={openRoutingCheckItem} />
         )}
 
         {/* Items + Detail Grid */}
-        <div style={{ display: showEmailSchedule || showRoutingChecks ? "none" : "grid", gridTemplateColumns: isWide ? "260px minmax(0,1.6fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 16, flex: isWide ? 1 : undefined, minHeight: 0 }}>
+        <div style={{ display: showEmailSchedule || showRoutingChecks || showRecordKeeping ? "none" : "grid", gridTemplateColumns: isWide ? "260px minmax(0,1.6fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 16, flex: isWide ? 1 : undefined, minHeight: 0 }}>
           {/* Form tree: pick a form to narrow the list, or All submissions for every form. */}
           <SapPanel label="Forms" sx={{ minHeight: 0, maxHeight: isWide ? undefined : 280 }}>
             <Box sx={{ overflow: "auto", flex: 1, minHeight: 0 }}>
@@ -3667,7 +3715,7 @@ export default function ApprovalDashboard() {
                     Rebuild PDFs
                   </Button>
                 )}
-                <Button size="small" variant="text" startIcon={<FileDownloadOutlined />} disabled={Boolean(bulkProgress)} onClick={exportChecked}>
+                <Button size="small" variant="text" startIcon={<FileDownloadOutlined />} disabled={Boolean(bulkProgress)} onClick={() => void exportChecked()}>
                   Export
                 </Button>
                 <Button size="small" variant="text" startIcon={<DeleteIcon />} disabled={Boolean(bulkProgress)}
@@ -4091,6 +4139,12 @@ export default function ApprovalDashboard() {
                         return branch?.label || selectedItem.SelectedBranch;
                       })()}
                     </div>
+                  )}
+                  {(isAdmin || isSuperuser) && (
+                    <SubmissionCorrectionsPanel
+                      corrections={readSubmissionCorrections(selectedItem.WorkflowAssignmentData)}
+                      formatTime={formatDateTime}
+                    />
                   )}
                   {(isAdmin || isSuperuser) && token && selectedActiveLayers.length > 0 && (
                     <LayerRecipientsPanel token={token} layers={selectedActiveLayers} fields={layerFields} />

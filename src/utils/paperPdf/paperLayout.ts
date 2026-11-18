@@ -22,6 +22,7 @@ import { paperFormVariant, type PaperVariant } from "./paperForms";
 import { buildTrainingAttendanceSections } from "./trainingAttendanceLayout";
 import { buildTrainingNeedsAnalysisSections } from "./trainingNeedsAnalysisLayout";
 import { buildTrainingRequisitionSections } from "./trainingRequisitionLayout";
+import { correctionsFromFields } from "../submissionCorrections";
 
 type El = Record<string, unknown>;
 
@@ -613,6 +614,12 @@ export function paperCompanies(
   return unique.map((label) => ({ label, selected: chosen !== "" && label.toLowerCase() === chosenLabel }));
 }
 
+/** "Corrected by submitter …" on the trace line of a submission its submitter changed. */
+function correctedTrace(corrections: readonly { at: string }[], fmt: (iso: string) => string): string {
+  if (corrections.length === 0) return "";
+  return `Corrected by submitter ${fmt(corrections[corrections.length - 1].at)}`;
+}
+
 export function buildPaperDocument(data: PdfFormData, options: PaperLayoutOptions): PaperDocument {
   const { surveyJson, responseData, meta, layerResults } = data;
 
@@ -629,6 +636,7 @@ export function buildPaperDocument(data: PdfFormData, options: PaperLayoutOption
     meta.submittedBy ? `Submitted by ${meta.submittedBy}` : "",
     meta.submittedAt ? options.fmtDateTime(meta.submittedAt) : "",
     meta.formStatus ? `Status: ${meta.formStatus}` : "",
+    correctedTrace(meta.corrections ?? correctionsFromFields(responseData), options.fmtDateTime),
   ].filter(Boolean).join("   ·   ");
 
   const header: PaperHeader = {

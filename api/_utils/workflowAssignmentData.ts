@@ -43,6 +43,30 @@ export interface RoutingCheckEntry {
   count?: number;
 }
 
+/**
+ * One correction a submitter made to their own submission before any step was
+ * decided (`/form/:formId?edit=`): who, when, and each answer before and after.
+ * Written in the same save as the new answers, so a correction never lands
+ * without its record. Never trimmed or rewritten: it is the audit trail.
+ */
+export interface SubmissionCorrectionChange {
+  /** The question's name in the form. */
+  question: string;
+  /** The question's wording at the time, when the form gave one. */
+  label?: string;
+  before: string;
+  after: string;
+}
+
+export interface SubmissionCorrectionEntry {
+  at: string;
+  by: string;
+  changes: SubmissionCorrectionChange[];
+}
+
+/** Longest answer text kept per side of a change; longer text ends in "…". */
+export const MAX_CORRECTION_VALUE_LENGTH = 2000;
+
 /** Newest checks kept per submission; older ones are dropped. */
 export const MAX_ROUTING_CHECKS = 60;
 
@@ -57,6 +81,7 @@ export interface WorkflowAssignmentData {
   version: 1;
   layers: Record<string, WorkflowAssignmentEntry>;
   checks?: RoutingCheckEntry[];
+  corrections?: SubmissionCorrectionEntry[];
 }
 
 export interface WorkflowAssignmentOverrideInput {
@@ -135,6 +160,43 @@ function parseRoutingCheck(value: unknown): RoutingCheckEntry | null {
   };
 }
 
+function correctionText(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.length > MAX_CORRECTION_VALUE_LENGTH ? `${value.slice(0, MAX_CORRECTION_VALUE_LENGTH - 1)}…` : value;
+}
+
+function parseCorrectionChange(value: unknown): SubmissionCorrectionChange | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const question = optionalText(record.question);
+  if (!question) return null;
+  return {
+    question,
+    ...(optionalText(record.label) ? { label: optionalText(record.label) } : {}),
+    before: correctionText(record.before),
+    after: correctionText(record.after),
+  };
+}
+
+function parseCorrection(value: unknown): SubmissionCorrectionEntry | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const at = optionalText(record.at);
+  const by = optionalText(record.by);
+  if (!at || !by || !Array.isArray(record.changes)) return null;
+  const changes = record.changes
+    .map(parseCorrectionChange)
+    .filter((change): change is SubmissionCorrectionChange => change !== null);
+  return changes.length > 0 ? { at, by, changes } : null;
+}
+
+function parseCorrections(value: unknown): SubmissionCorrectionEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(parseCorrection)
+    .filter((entry): entry is SubmissionCorrectionEntry => entry !== null);
+}
+
 function parseRoutingChecks(value: unknown): RoutingCheckEntry[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -158,7 +220,13 @@ export function parseWorkflowAssignmentData(raw: unknown): WorkflowAssignmentDat
   }
 
   const checks = parseRoutingChecks((value as Record<string, unknown>).checks);
-  const checksPart = checks.length > 0 ? { checks } : {};
+  const corrections = parseCorrections((value as Record<string, unknown>).corrections);
+  // Both logs ride along on every rewrite of this column, so a routing check or
+  // a reassignment can never drop a submission's correction record.
+  const checksPart = {
+    ...(checks.length > 0 ? { checks } : {}),
+    ...(corrections.length > 0 ? { corrections } : {}),
+  };
   const rawLayers = (value as Record<string, unknown>).layers;
   if (!rawLayers || typeof rawLayers !== "object" || Array.isArray(rawLayers)) {
     return { ...EMPTY_ASSIGNMENT_DATA, layers: {}, ...checksPart };
@@ -222,6 +290,22 @@ export function recordRoutingCheck(
   }
   checks.push(entry);
   return { data: { ...data, checks: checks.slice(-MAX_ROUTING_CHECKS) }, isNew: true, count: 1 };
+}
+
+/** The corrections a submitter made to this submission, oldest first. */
+export function readSubmissionCorrections(raw: unknown): SubmissionCorrectionEntry[] {
+  return parseWorkflowAssignmentData(raw).corrections ?? [];
+}
+
+/** Adds one correction to the record. Nothing is ever dropped from it. */
+export function recordSubmissionCorrection(
+  raw: unknown,
+  entry: SubmissionCorrectionEntry,
+): WorkflowAssignmentData {
+  const data = parseWorkflowAssignmentData(raw);
+  const parsed = parseCorrection(entry);
+  if (!parsed) return data;
+  return { ...data, corrections: [...(data.corrections ?? []), parsed] };
 }
 
 export function getWorkflowAssignment(
