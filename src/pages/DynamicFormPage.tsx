@@ -64,7 +64,8 @@ import { buildWorkflowReviewLink } from "../utils/workflowLink";
 import { foldOtherAnswers } from "../utils/surveyOtherAnswers";
 import { parseReferenceNumberConfig, REFERENCE_NO_FIELD } from "../utils/referenceNumber";
 import { buildManualPaperSubmissionEmail } from "../utils/manualPaperEmail";
-import { isTrainingNeedsAnalysisForm, manualPaperDesign } from "../utils/paperPdf/paperForms";
+import { isTrainingNeedsAnalysisForm, isTrainingRequisitionForm, manualPaperDesign } from "../utils/paperPdf/paperForms";
+import PaperRequisitionInput, { focusPartialRequisitionDate } from "../components/paper/PaperRequisitionInput";
 import PaperNeedsAnalysisInput, { compactNeedsAnswers, focusPartialNeedsDate, unfinishedNeedsRows, needsAnalysisQuestions, requirePreparedDesignation } from "../components/paper/PaperNeedsAnalysisInput";
 import { parseValidEmailList, writeLayerRecipientFields } from "../utils/layerRecipients";
 import { expandLayerDistributionList } from "../utils/expandLayerGroup";
@@ -1530,6 +1531,8 @@ export default function DynamicFormPage() {
   // name falls back to their account); the post stays theirs to correct, and
   // is left blank for someone the directory lists without one.
   const paperNeedsAnalysis = formReady && isTrainingNeedsAnalysisForm(String(formData?.formConfig?.Title || nativeForm?.title || ""));
+  // The Training Requisition is filled in on its own paper form too.
+  const paperRequisition = formReady && !paperNeedsAnalysis && isTrainingRequisitionForm(String(formData?.formConfig?.Title || nativeForm?.title || ""));
   const [preparedBy, setPreparedBy] = useState<{ name: string; position: string }>({ name: "", position: "" });
   useEffect(() => {
     if (!paperNeedsAnalysis || !nativeForm || !userEmail) return;
@@ -1681,6 +1684,7 @@ export default function DynamicFormPage() {
     }
     // A date typed only in part looks filled in but would be saved as no date at all.
     if (paperNeedsAnalysis && focusPartialNeedsDate()) return false;
+    if (paperRequisition && focusPartialRequisitionDate()) return false;
 
     if (!pdpaAccepted) {
       setPdpaConsentError(pdpa.ui.consentRequired);
@@ -1702,7 +1706,7 @@ export default function DynamicFormPage() {
     );
     setSubmitStatus("loading");
     return true;
-  }, [formReady, submitStatus, runtime, pdpaAccepted, pdpa.ui.consentRequired, paperNeedsAnalysis]);
+  }, [formReady, submitStatus, runtime, pdpaAccepted, pdpa.ui.consentRequired, paperNeedsAnalysis, paperRequisition]);
 
   /*
     "Simulate submission". Two passes, because both the sample answers and the
@@ -2795,7 +2799,7 @@ export default function DynamicFormPage() {
                 <button onClick={() => setRestoredAfterSignIn(false)} style={{ fontSize: 11, color: t.textSecond, background: "none", border: `1px solid ${t.border}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer", fontFamily: "'DM Sans'", flexShrink: 0 }}>Dismiss</button>
               </div>
             )}
-            {formReady ? <div className="dfp-survey-wrap">{paperNeedsAnalysis ? <PaperNeedsAnalysisInput runtime={runtime} disabled={submitStatus === "loading"} preparedByName={preparedBy.name} preparedByPosition={preparedBy.position} /> : <NativeFormView runtime={runtime} dark={dark} />}</div> : !enrichedSurveyJson && formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
+            {formReady ? <div className="dfp-survey-wrap">{paperNeedsAnalysis ? <PaperNeedsAnalysisInput runtime={runtime} disabled={submitStatus === "loading"} preparedByName={preparedBy.name} preparedByPosition={preparedBy.position} /> : paperRequisition ? <PaperRequisitionInput runtime={runtime} disabled={submitStatus === "loading"} formTitle={formTitle} documentTitle={isoStandardsText} logoUrl={logoUrl || "/logo-128.png"} /> : <NativeFormView runtime={runtime} dark={dark} />}</div> : !enrichedSurveyJson && formData && !error ? <div style={{ textAlign: "center", padding: 40, color: t.textMuted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}><Spinner t={t} /><span>Preparing form...</span></div> : <div style={{ textAlign: "center", padding: 40, color: t.textMuted }}>Unable to render form.</div>}
             {formReady && isLastSurveyPage && (
               <>
                 {isTestRun && (
